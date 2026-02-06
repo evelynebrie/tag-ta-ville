@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Voxelized Montreal - Tile Loading</title>
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <style>
+    body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+    .info-panel {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 15px;
+      border-radius: 5px;
+      font-family: monospace;
+      font-size: 12px;
+      z-index: 1;
+      max-width: 300px;
+    }
+    .info-panel h3 {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+    }
+    .controls {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 15px;
+      border-radius: 5px;
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      z-index: 1;
+      max-width: 250px;
+    }
+    .controls h3 {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+    }
+    .controls label {
+      display: block;
+      margin: 10px 0;
+      cursor: pointer;
+    }
+    .controls input[type="checkbox"] {
+      margin-right: 8px;
+    }
+    .controls button {
+      width: 100%;
+      padding: 8px;
+      margin: 5px 0;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .controls button:hover {
+      background: #45a049;
+    }
+    .controls button:disabled {
+      background: #666;
+      cursor: not-allowed;
+    }
+    .status-good { color: #4CAF50; }
+    .status-loading { color: #FFC107; }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+<div class="info-panel">
+  <h3>VOXEL MONTREAL</h3>
+  <div>Zoom: <span id="zoom">-</span></div>
+  <div>Pitch: <span id="pitch">-</span>°</div>
+  <div>Building Cubes: <span id="cubes">0</span></div>
+  <div>Tree Cubes: <span id="trees">0</span></div>
+  <div>Tiles Loaded: <span id="tiles-loaded">0</span></div>
+  <div>Buildings Loaded: <span id="buildings-count">0</span></div>
+  <div>Status: <span id="status" class="status-loading">Loading...</span></div>
+  <div style="font-size: 10px; color: #888; margin-top: 8px;">
+    On-demand tile loading<br>
+    Data © OpenStreetMap
+  </div>
+</div>
+
+<div class="controls">
+  <h3>Controls</h3>
+  <button id="btn-generate" disabled>Generate Voxels</button>
+  <button id="btn-clear">Clear Voxels</button>
+  <hr style="margin: 10px 0; border-color: #555;">
+  <label>
+    <input type="checkbox" id="toggle-buildings" checked>
+    Buildings
+  </label>
+  <label>
+    <input type="checkbox" id="toggle-trees" checked>
+    Trees
+  </label>
+  <hr style="margin: 10px 0; border-color: #555;">
+  <div style="font-size: 10px; color: #aaa;">
+    Pan/zoom to load more buildings
+  </div>
+</div>
+
+<script>
+window.addEventListener('load', function() {
+  
+mapboxgl.accessToken = "pk.eyJ1IjoiZXZlbHluZWJyaWUiLCJhIjoiY2themE5OGF2MDdxazJybG9oNzUyaXoxNSJ9.njPe2lcTp82DKjDeGkHaQA";
+
+const map = new mapboxgl.Map({
+  container: "map",
+  style: "mapbox://styles/mapbox/dark-v11",
+  center: [-73.5673, 45.5017],
+  zoom: 14,
+  pitch: 65,
+  bearing: -20,
+  antialias: true
+});
+
+let tileManifest = null;
+let loadedTiles = new Set();
+let allBuildings = [];
+let voxelsGenerated = false;
+
+function updateInfo() {
+  document.getElementById('zoom').textContent = map.getZoom().toFixed(2);
+  document.getElementById('pitch').textContent = map.getPitch().toFixed(0);
+}
+
+map.on('move', updateInfo);
+
+map.on("load", () => {
+  updateInfo();
+  
+  map.setMaxBounds([
+    [-73.98, 45.40],
+    [-73.48, 45.70]
+  ]);
+
+  loadTileManifest();
+});
+
+// Load tile manifest
+function loadTileManifest() {
+  document.getElementById('status').textContent = "Loading tile system...";
+  
+  fetch('./tiles/tile_manifest.json')
+    .then(r => r.json())
+    .then(manifest => {
+      tileManifest = manifest;
+      console.log('Tile manifest loaded:', manifest);
+      console.log(`Total buildings: ${manifest.total_buildings}, Tiles: ${manifest.total_tiles}`);
+      
+      document.getElementById('status').textContent = "Ready!";
+      document.getElementById('status').className = 'status-good';
+      document.getElementById('btn-generate').disabled = false;
+    })
+    .catch(error => {
+      console.error('Error loading manifest:', error);
+      document.getElementById('status').textContent = "Error loading tiles!";
+      alert('Error: Make sure the tiles/ folder is in the same directory as index.html');
+    });
+}
+
+// Get tiles that intersect viewport
+function getTilesInView() {
+  const bounds = map.getBounds();
+  const sw = bounds.getSouthWest();
+  const ne = bounds.getNorthEast();
+  
+  const tilesInView = [];
+  
+  tileManifest.tiles.forEach(tile => {
+    const [minLon, minLat, maxLon, maxLat] = tile.bounds;
+    
+    // Check if tile intersects viewport
+    if (!(maxLon < sw.lng || minLon > ne.lng || maxLat < sw.lat || minLat > ne.lat)) {
+      tilesInView.push(tile);
+    }
+  });
+  
+  return tilesInView;
+}
+
+// Load tiles
+async function loadTilesInView() {
+  const tilesInView = getTilesInView();
+  console.log(`Tiles in view: ${tilesInView.length}`);
+  
+  const tilesToLoad = tilesInView.filter(tile => !loadedTiles.has(tile.file));
+  
+  if (tilesToLoad.length === 0) {
+    console.log('All visible tiles already loaded');
+    return;
+  }
+  
+  console.log(`Loading ${tilesToLoad.length} new tiles...`);
+  document.getElementById('status').textContent = `Loading ${tilesToLoad.length} tiles...`;
+  
+  let loadedCount = 0;
+  
+  for (const tile of tilesToLoad) {
+    try {
+      const response = await fetch(`./tiles/${tile.file}`);
+      const blob = await response.blob();
+      
+      // Decompress
+      const buffer = await blob.arrayBuffer();
+      const decompressed = pako.ungzip(new Uint8Array(buffer), { to: 'string' });
+      const tileData = JSON.parse(decompressed);
+      
+      // Add buildings
+      allBuildings = allBuildings.concat(tileData.features);
+      loadedTiles.add(tile.file);
+      loadedCount++;
+      
+      console.log(`Loaded ${tile.file}: ${tileData.features.length} buildings`);
+      
+    } catch (error) {
+      console.error(`Error loading ${tile.file}:`, error);
+    }
+  }
+  
+  document.getElementById('tiles-loaded').textContent = loadedTiles.size;
+  document.getElementById('buildings-count').textContent = allBuildings.length.toLocaleString();
+  document.getElementById('status').textContent = "Ready!";
+  document.getElementById('status').className = 'status-good';
+  
+  console.log(`Total buildings loaded: ${allBuildings.length}`);
+}
+
+// Generate button
+document.getElementById('btn-generate').addEventListener('click', async function() {
+  if (voxelsGenerated) {
+    alert('Voxels already generated. Clear first to regenerate.');
+    return;
+  }
+  
+  this.disabled = true;
+  document.getElementById('status').textContent = "Loading tiles...";
+  document.getElementById('status').className = 'status-loading';
+  
+  // Load tiles in viewport
+  await loadTilesInView();
+  
+  // Generate voxels
+  setTimeout(() => {
+    generateVoxels();
+  }, 100);
+});
+
+// Clear button
+document.getElementById('btn-clear').addEventListener('click', function() {
+  clearVoxels();
+  voxelsGenerated = false;
+  document.getElementById('btn-generate').disabled = false;
+  document.getElementById('cubes').textContent = '0';
+  document.getElementById('trees').textContent = '0';
+  document.getElementById('status').textContent = "Ready!";
+  document.getElementById('status').className = 'status-good';
+});
+
+function clearVoxels() {
+  if (map.getLayer('voxel-fill')) {
+    map.removeLayer('voxel-fill');
+    map.removeSource('voxel-cubes');
+  }
+  
+  if (map.getLayer('tree-cubes')) {
+    map.removeLayer('tree-cubes');
+    map.removeSource('tree-cubes');
+  }
+  
+  if (map.getLayer('building')) {
+    map.setLayoutProperty('building', 'visibility', 'visible');
+  }
+}
+
+// Layer toggles
+document.getElementById('toggle-buildings').addEventListener('change', function(e) {
+  const visibility = e.target.checked ? 'visible' : 'none';
+  if (map.getLayer('voxel-fill')) {
+    map.setLayoutProperty('voxel-fill', 'visibility', visibility);
+  }
+});
+
+document.getElementById('toggle-trees').addEventListener('change', function(e) {
+  const visibility = e.target.checked ? 'visible' : 'none';
+  if (map.getLayer('tree-cubes')) {
+    map.setLayoutProperty('tree-cubes', 'visibility', visibility);
+  }
+});
+
+function generateVoxels() {
+  console.log(`Generating voxels for ${allBuildings.length} buildings`);
+  document.getElementById('status').textContent = "Generating voxels...";
+  
+  const CUBE_SIZE = 5;
+  const centerLat = 45.5017;
+  
+  const metersPerDegreeLat = 111320;
+  const metersPerDegreeLon = 111320 * Math.cos(centerLat * Math.PI / 180);
+  
+  const cubeSizeDegLat = CUBE_SIZE / metersPerDegreeLat;
+  const cubeSizeDegLon = CUBE_SIZE / metersPerDegreeLon;
+  
+  if (map.getLayer('building')) {
+    map.setLayoutProperty('building', 'visibility', 'none');
+  }
+  
+  const allCubes = [];
+  let cubeCount = 0;
+  
+  // Filter to viewport
+  const bounds = map.getBounds();
+  const bboxPoly = turf.bboxPolygon([bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()]);
+  
+  const visibleBuildings = allBuildings.filter(feature => {
+    try {
+      const center = turf.center(feature);
+      return turf.booleanPointInPolygon(center, bboxPoly);
+    } catch (e) {
+      return false;
+    }
+  });
+  
+  console.log(`${visibleBuildings.length} buildings in viewport`);
+  
+  visibleBuildings.forEach((building, idx) => {
+    const height = building.properties?.height || 10;
+    const geometry = building.geometry;
+    
+    if (!geometry) return;
+    
+    try {
+      let poly;
+      
+      if (geometry.type === 'Polygon') {
+        poly = turf.polygon(geometry.coordinates);
+      } else if (geometry.type === 'MultiPolygon') {
+        poly = turf.polygon(geometry.coordinates[0]);
+      } else {
+        return;
+      }
+      
+      const bbox = turf.bbox(poly);
+      const [minLon, minLat, maxLon, maxLat] = bbox;
+      const numLayers = Math.ceil(height / CUBE_SIZE);
+      
+      for (let layer = 0; layer < numLayers; layer++) {
+        const baseHeight = layer * CUBE_SIZE;
+        const topHeight = (layer + 1) * CUBE_SIZE;
+        
+        const verticalGap = 0.2;
+        const actualBase = baseHeight + verticalGap;
+        const actualTop = Math.min(topHeight - verticalGap, height);
+        
+        let color;
+        if (baseHeight < 25) color = '#16213e';
+        else if (baseHeight < 50) color = '#0f3460';
+        else if (baseHeight < 75) color = '#533483';
+        else if (baseHeight < 100) color = '#9d4edd';
+        else color = '#e94560';
+        
+        for (let lat = minLat; lat <= maxLat; lat += cubeSizeDegLat) {
+          for (let lon = minLon; lon <= maxLon; lon += cubeSizeDegLon) {
+            
+            const gap = 0.05;
+            const gapLat = cubeSizeDegLat * gap;
+            const gapLon = cubeSizeDegLon * gap;
+            
+            const cubeSquare = turf.polygon([[
+              [lon + gapLon, lat + gapLat],
+              [lon + cubeSizeDegLon - gapLon, lat + gapLat],
+              [lon + cubeSizeDegLon - gapLon, lat + cubeSizeDegLat - gapLat],
+              [lon + gapLon, lat + cubeSizeDegLat - gapLat],
+              [lon + gapLon, lat + gapLat]
+            ]]);
+            
+            try {
+              const intersects = turf.booleanIntersects(cubeSquare, poly);
+              
+              if (intersects) {
+                allCubes.push({
+                  type: 'Feature',
+                  properties: {
+                    height: actualTop,
+                    base: actualBase,
+                    color: color
+                  },
+                  geometry: cubeSquare.geometry
+                });
+                cubeCount++;
+              }
+            } catch (e) {
+              // Skip
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error processing building:', e);
+    }
+    
+    if (idx % 100 === 0 && idx > 0) {
+      const progress = Math.round((idx / visibleBuildings.length) * 100);
+      document.getElementById('status').textContent = `Generating voxels... ${progress}%`;
+    }
+  });
+  
+  console.log(`Generated ${cubeCount} cubes`);
+  document.getElementById('cubes').textContent = cubeCount;
+  
+  if (cubeCount === 0) {
+    alert('No voxels generated. Try zooming in to an area with buildings.');
+    document.getElementById('btn-generate').disabled = false;
+    return;
+  }
+  
+  if (map.getLayer('voxel-fill')) {
+    map.removeLayer('voxel-fill');
+    map.removeSource('voxel-cubes');
+  }
+  
+  map.addSource('voxel-cubes', {
+    type: 'geojson',
+    data: {
+      type: 'FeatureCollection',
+      features: allCubes
+    }
+  });
+  
+  map.addLayer({
+    id: 'voxel-fill',
+    type: 'fill-extrusion',
+    source: 'voxel-cubes',
+    paint: {
+      'fill-extrusion-color': ['get', 'color'],
+      'fill-extrusion-height': ['get', 'height'],
+      'fill-extrusion-base': ['get', 'base'],
+      'fill-extrusion-opacity': 1,
+      'fill-extrusion-vertical-gradient': false
+    }
+  });
+  
+  document.getElementById('status').textContent = "Complete!";
+  document.getElementById('status').className = 'status-good';
+  voxelsGenerated = true;
+  
+  if (!map._controlsAdded) {
+    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    map.addControl(new mapboxgl.FullscreenControl(), 'top-right');
+    map._controlsAdded = true;
+  }
+}
+
+});
+</script>
+<script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+</body>
+</html>

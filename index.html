@@ -1,0 +1,4192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tag ta Ville</title>
+  <script src='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'></script>
+  <link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
+  <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+  
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    
+    #map { width: 100vw; height: 100vh; }
+    
+    .panel {
+      position: fixed;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    }
+    
+    /* Main Control Panel - Top Left */
+    .main-panel {
+      top: 20px;
+      left: 20px;
+      width: 340px;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+      padding: 20px;
+    }
+    
+    .main-panel h2 {
+      font-size: 22px;
+      margin-bottom: 20px;
+      color: #1a73e8;
+      font-weight: 700;
+    }
+    
+    .step-section {
+      margin-bottom: 20px;
+    }
+    
+    .step-header {
+      font-size: 15px;
+      font-weight: 600;
+      color: #1a73e8;
+      margin-bottom: 12px;
+      padding: 8px 12px;
+      background: #e8f0fe;
+      border-radius: 4px;
+    }
+    
+    .step-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #555;
+      margin-bottom: 8px;
+    }
+    
+    .button-group {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    
+    .btn {
+      flex: 1;
+      padding: 10px;
+      border: 2px solid #4285f4;
+      background: white;
+      color: #4285f4;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn:hover { background: #f0f7ff; }
+    .btn.active { background: #4285f4; color: white; }
+    
+    .address-input {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+    
+    .address-input:focus { outline: none; border-color: #4285f4; }
+    
+    .address-suggestions {
+      background: white;
+      border: 2px solid #ddd;
+      border-top: none;
+      border-radius: 0 0 4px 4px;
+      max-height: 200px;
+      overflow-y: auto;
+      margin-bottom: 10px;
+    }
+    
+    .address-suggestion {
+      padding: 10px;
+      cursor: pointer;
+      font-size: 13px;
+      color: #333;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .address-suggestion:hover { background: #f5f5f5; }
+    .address-suggestion:last-child { border-bottom: none; }
+    
+    .confirm-btn, .next-btn, .submit-btn {
+      width: 100%;
+      padding: 12px;
+      background: #4285f4;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    
+    .confirm-btn:hover, .next-btn:hover { background: #357ae8; }
+    
+    .next-btn {
+      background: #34a853;
+      margin-top: 15px;
+    }
+    
+    .next-btn:hover { background: #2d9348; }
+    
+    .submit-btn {
+      background: #34a853;
+      font-size: 16px;
+      padding: 14px;
+    }
+    
+    .submit-btn:hover { background: #2d9348; }
+    
+    .clear-btn {
+      width: 100%;
+      padding: 10px;
+      background: white;
+      color: #666;
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    
+    .clear-btn:hover {
+      background: #f5f5f5;
+      border-color: #999;
+    }
+    
+    .instruction {
+      font-size: 13px;
+      color: #666;
+      padding: 10px;
+      background: #f5f5f5;
+      border-radius: 4px;
+      margin: 8px 0;
+    }
+    
+    .selected-info {
+      background: #e8f0fe;
+      padding: 12px;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      border-left: 4px solid #4285f4;
+    }
+    
+    .selected-info div {
+      font-size: 13px;
+      color: #333;
+      margin-bottom: 4px;
+    }
+    
+    .selected-info div:last-child { margin-bottom: 0; }
+    
+    /* Tag Mode Selector (Red/Green) */
+    .tag-mode-selector {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 15px;
+    }
+    
+    .tag-mode-btn {
+      flex: 1;
+      padding: 12px;
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: white;
+    }
+    
+    .tag-mode-btn.danger-mode {
+      color: #ea4335;
+      border-color: #ea4335;
+    }
+    
+    .tag-mode-btn.danger-mode.active {
+      background: #ea4335;
+      color: white;
+    }
+    
+    .tag-mode-btn.safe-mode {
+      color: #34a853;
+      border-color: #34a853;
+    }
+    
+    .tag-mode-btn.safe-mode.active {
+      background: #34a853;
+      color: white;
+    }
+    
+    /* Tool Selector (Cursor/Tag Can/Pressure Washer) */
+    .tool-selector-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    
+    .tool-btn {
+      flex: 1;
+      padding: 8px 4px;
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: white;
+      color: #666;
+      text-align: center;
+      line-height: 1.3;
+    }
+    
+    .tool-btn:hover { background: #f5f5f5; }
+    
+    .tool-btn.active {
+      background: #4285f4;
+      color: white;
+      border-color: #4285f4;
+    }
+    
+    .tool-emoji {
+      font-size: 20px;
+      display: block;
+      margin-bottom: 4px;
+    }
+    
+    .spray-size-control {
+      margin-bottom: 12px;
+    }
+    
+    .slider {
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: #ddd;
+      outline: none;
+    }
+    
+    .toggle-label {
+      display: block;
+      font-size: 13px;
+      color: #555;
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+    
+    .toggle-label input { margin-right: 8px; }
+    
+    .paint-target-selector {
+      padding: 10px;
+      background: #f8f9fa;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+    
+    .submit-info {
+      font-size: 13px;
+      color: #666;
+      padding: 12px;
+      background: #f8f9fa;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+    
+    .reset-btn {
+      width: 100%;
+      padding: 10px;
+      background: #666;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    
+    .reset-btn:hover { background: #555; }
+    
+    .hidden { display: none !important; }
+    
+    /* Info Panel - BOTTOM RIGHT */
+    .info-panel {
+      bottom: 20px;
+      right: 20px;
+      padding: 15px;
+      font-size: 13px;
+    }
+    
+    .info-row { margin-bottom: 5px; }
+    .info-label { font-weight: 600; color: #555; margin-right: 5px; }
+    .status { color: #4285f4; font-weight: 500; }
+    .status.loading { color: #fbbc04; }
+    
+    /* <span data-en="View Controls" data-fr="Contrôles de vue">Contrôles de vue</span> - Top Right */
+    .view-controls {
+      top: 20px;
+      right: 20px;
+      padding: 15px;
+      width: 200px;
+    }
+    
+    .view-controls h3 {
+      font-size: 14px;
+      margin-bottom: 12px;
+      color: #333;
+      font-weight: 600;
+    }
+    
+    .control-group { margin-bottom: 12px; }
+    
+    .control-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: #555;
+      margin-bottom: 6px;
+    }
+    
+    /* Cluster Items */
+    .cluster-item {
+      background: #f8f9fa;
+      padding: 12px;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      border-left: 4px solid;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .cluster-item:hover {
+      background: #e8f0fe;
+    }
+    
+    .cluster-item.selected {
+      background: #e8f0fe;
+    }
+    
+    .cluster-item.disliked.selected {
+      background: #fce8e6;
+      box-shadow: 0 0 0 3px #ea4335;
+    }
+    
+    .cluster-item.liked.selected {
+      background: #e6f4ea;
+      box-shadow: 0 0 0 3px #34a853;
+    }
+    
+    .cluster-item.disliked { border-color: #ea4335; }
+    .cluster-item.liked { border-color: #34a853; }
+    
+    .cluster-header {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #333;
+    }
+    
+    .cluster-input {
+      width: 100%;
+      padding: 8px;
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+    
+    .cluster-input:focus {
+      outline: none;
+      border-color: #4285f4;
+    }
+    
+    .cluster-save-btn {
+      padding: 6px 12px;
+      background: #4285f4;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    
+    .cluster-save-btn:hover { background: #357ae8; }
+    
+    .cluster-save-btn.saved {
+      background: #34a853;
+      pointer-events: none;
+    }
+    
+    .cluster-save-btn.saved:after {
+      content: " ✓";
+    }
+    
+    /* Welcome popup */
+    .welcome-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    }
+    
+    .welcome-popup {
+      position: relative;
+      background: white;
+      border-radius: 12px;
+      padding: 40px;
+      max-width: 600px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      text-align: center;
+    }
+    
+    .welcome-logo {
+      width: 120px;
+      height: 120px;
+      margin: 0 auto 20px;
+    }
+    
+    .welcome-title {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1a73e8;
+      margin-bottom: 20px;
+    }
+    
+    .welcome-text {
+      font-size: 16px;
+      color: #666;
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+    
+    .welcome-buttons {
+      display: flex;
+      gap: 15px;
+      justify-content: center;
+      margin-top: 32px;
+    }
+    
+    .welcome-btn {
+      padding: 12px 30px;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+    }
+    
+    .welcome-btn.primary {
+      background: #1a73e8;
+      color: white;
+    }
+    
+    .welcome-btn.primary:hover {
+      background: #1557b0;
+    }
+    
+    .welcome-btn.secondary {
+      background: white;
+      color: #1a73e8;
+      border: 2px solid #1a73e8;
+    }
+    
+    .welcome-btn.secondary:hover {
+      background: #f0f7ff;
+    }
+    
+    /* Tag checkboxes */
+    .tag-checkboxes {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    
+    .tag-checkbox-label {
+      display: flex;
+      align-items: center;
+      padding: 8px;
+      background: #f8f9fa;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+    
+    .tag-checkbox-label:hover {
+      background: #e8f0fe;
+    }
+    
+    .tag-checkbox-label input {
+      margin-right: 8px;
+    }
+    
+    .cluster-comment {
+      width: 100%;
+      padding: 8px;
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      font-size: 12px;
+      margin-bottom: 8px;
+      resize: vertical;
+      min-height: 50px;
+      font-family: inherit;
+    }
+    
+    .cluster-comment:focus {
+      outline: none;
+      border-color: #4285f4;
+    }
+    
+    /* On-screen navigation arrows (Step 1 & 2) */
+    .map-nav-controls {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      display: none;
+      background: white;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      z-index: 100;
+    }
+    
+    .map-nav-controls.active { display: block; }
+    
+    .map-nav-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 45px);
+      grid-template-rows: repeat(3, 45px);
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    
+    .map-nav-btn {
+      background: #f5f5f5;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 18px;
+      font-weight: bold;
+      color: #555;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .map-nav-btn:hover {
+      background: #e0e0e0;
+      border-color: #999;
+      transform: scale(1.05);
+    }
+    
+    .map-nav-btn:active {
+      transform: scale(0.95);
+    }
+    
+    .map-nav-btn.active-press {
+      background: #4285f4;
+      color: white;
+      border-color: #4285f4;
+      transform: scale(0.95);
+    }
+    
+    .map-nav-btn.rotate {
+      background: #4285f4;
+      color: white;
+      border-color: #4285f4;
+      font-size: 18px;
+    }
+    
+    .map-nav-btn.rotate:hover {
+
+.map-nav-btn.zoom {
+  background: #34a853;
+  color: white;
+  border-color: #34a853;
+  font-size: 24px;
+}
+
+.map-nav-btn.zoom:hover {
+  background: #2d9348;
+}
+      background: #357ae8;
+    }
+    
+    .map-nav-label {
+      font-size: 10px;
+      color: #666;
+      text-align: center;
+      font-weight: 500;
+    }
+    
+    /* Back button */
+    .back-btn {
+      width: 100%;
+      padding: 10px;
+      background: white;
+      color: #666;
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+    }
+    
+    .back-btn:hover {
+      background: #f5f5f5;
+      border-color: #999;
+    }
+    
+    /* Step 3 detailed tagging */
+    .cluster-type-badge {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    
+    .cluster-type-badge.disliked {
+      background: #fce8e6;
+      color: #ea4335;
+      border: 2px solid #ea4335;
+    }
+    
+    .cluster-type-badge.liked {
+      background: #e6f4ea;
+      color: #34a853;
+      border: 2px solid #34a853;
+    }
+    
+    .cluster-size {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 15px;
+      font-weight: 500;
+    }
+    
+    .tag-category {
+      margin-bottom: 15px;
+      background: white;
+      border-radius: 8px;
+      border: 2px solid #e0e0e0;
+      overflow: hidden;
+    }
+    
+    .tag-category-header {
+      background: linear-gradient(to bottom, #f8f9fa, #f0f0f0);
+      padding: 10px 15px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      border-bottom: 2px solid #e0e0e0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+    }
+    
+    .tag-category-header:hover {
+      background: linear-gradient(to bottom, #f0f0f0, #e8e8e8);
+    }
+    
+    .tag-category-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .tag-category-icon {
+      font-size: 16px;
+      display: none; /* REMOVE EMOJIS */
+    }
+    
+    .tag-category-arrow {
+      font-size: 12px;
+      transition: transform 0.3s;
+    }
+    
+    .tag-category.collapsed .tag-category-arrow {
+      transform: rotate(-90deg);
+    }
+    
+    .tag-options-group {
+      padding: 10px;
+      display: block;
+    }
+    
+    .tag-category.collapsed .tag-options-group {
+      display: none;
+    }
+    
+    .tag-section-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 8px 0 6px 4px;
+    }
+    
+    .tag-section-label.positive { color: #34a853; }
+    .tag-section-label.negative { color: #ea4335; }
+    
+    .tag-option-item {
+      display: flex;
+      align-items: center;
+      padding: 8px 10px;
+      margin-bottom: 5px;
+      background: #fafafa;
+      border: 2px solid #e8e8e8;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 12px;
+      user-select: none;
+    }
+    
+    /* FIX 5: Color all positive tags green */
+    .tag-option-item.positive {
+      background: rgba(52, 168, 83, 0.08);
+      border-color: rgba(52, 168, 83, 0.25);
+    }
+    
+    /* FIX 5: Color all negative tags red */
+    .tag-option-item.negative {
+      background: rgba(234, 67, 53, 0.08);
+      border-color: rgba(234, 67, 53, 0.25);
+    }
+    
+    .tag-option-item:hover {
+      background: #f0f7ff;
+      border-color: #b3d9ff;
+      transform: translateX(2px);
+    }
+    
+    .tag-option-item.selected {
+      background: #e8f0fe;
+      border-color: #4285f4;
+      font-weight: 500;
+    }
+    
+    .tag-option-item.positive.selected {
+      background: #e6f4ea;
+      border-color: #34a853;
+      color: #1e7e34;
+    }
+    
+    .tag-option-item.negative.selected {
+      background: #fce8e6;
+      border-color: #ea4335;
+      color: #c5221f;
+    }
+    
+    .tag-option-checkbox {
+      width: 18px;
+      height: 18px;
+      margin-right: 10px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    
+    .tag-option-label {
+      flex: 1;
+    }
+    
+    .season-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 60px;
+      padding: 2px 8px;
+      margin-right: 8px;
+      background: #4285f4;
+      color: white;
+      border-radius: 12px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .season-badge.spring { background: #34a853; }
+    .season-badge.summer { background: #fbbc04; color: #333; }
+    .season-badge.fall { background: #ea8600; }
+    .season-badge.winter { background: #4285f4; }
+    
+    .cluster-comment-full {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      margin: 12px 0;
+      resize: vertical;
+      min-height: 70px;
+      font-family: inherit;
+    }
+    
+    .cluster-comment-full:focus {
+      outline: none;
+      border-color: #4285f4;
+      background: #f9fbff;
+    }
+    
+    .cluster-nav-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    
+    .nav-cluster-btn {
+      padding: 10px;
+      border: 2px solid #ddd;
+      background: white;
+      color: #666;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .nav-cluster-btn:hover:not(:disabled) {
+      background: #f5f5f5;
+      border-color: #999;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .nav-cluster-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+    
+    .nav-cluster-btn.primary {
+      background: #4285f4;
+      color: white;
+      border-color: #4285f4;
+    }
+    
+    .nav-cluster-btn.primary:hover {
+      background: #357ae8;
+    }
+    
+    .nav-cluster-btn.skip {
+      color: #999;
+      border-style: dashed;
+    }
+    
+    .nav-cluster-btn.skip:hover {
+      color: #666;
+      border-color: #666;
+    }
+
+
+    /* Custom Alert Popup */
+    .custom-alert-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      animation: fadeIn 0.2s ease-in;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    .custom-alert {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 500px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      animation: slideIn 0.3s ease-out;
+    }
+    
+    @keyframes slideIn {
+      from {
+        transform: translateY(-50px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+    
+    .custom-alert h3 {
+      margin: 0 0 16px 0;
+      font-size: 20px;
+      color: #333;
+    }
+    
+    .custom-alert-content {
+      margin-bottom: 20px;
+      font-size: 14px;
+      line-height: 1.6;
+      color: #555;
+    }
+    
+    .custom-alert-button {
+      width: 100%;
+      padding: 12px;
+      background: #4285f4;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    
+    .custom-alert-button:hover {
+      background: #3367d6;
+    }
+    
+
+    /* Language Toggle Slider */
+    .lang-toggle-container {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      z-index: 10;
+    }
+    
+    .lang-toggle {
+      position: relative;
+      display: inline-block;
+      width: 80px;
+      height: 36px;
+      background: #e0e0e0;
+      border-radius: 18px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    
+    .lang-toggle:hover {
+      background: #d0d0d0;
+    }
+    
+    .lang-toggle-slider {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 36px;
+      height: 30px;
+      background: white;
+      border-radius: 15px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      transition: transform 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      font-weight: 700;
+      font-size: 13px;
+      color: #0d47a1;
+      letter-spacing: 0.5px;
+      -webkit-font-smoothing: subpixel-antialiased;
+      text-rendering: geometricPrecision;
+    }
+    
+    .lang-toggle.en .lang-toggle-slider {
+      transform: translateX(44px);
+    }
+    
+    .lang-toggle-labels {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px;
+      pointer-events: none;
+    }
+    
+    .lang-toggle-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #666;
+      transition: color 0.3s, opacity 0.3s;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    
+    /* Hide FR label when slider is on it (default state) */
+    .lang-toggle:not(.en) .lang-toggle-label.fr {
+      opacity: 0;
+    }
+    
+    /* Hide EN label when slider is on it */
+    .lang-toggle.en .lang-toggle-label.en {
+      opacity: 0;
+    }
+    
+    /* Show FR label when slider is NOT on it (EN selected) */
+    .lang-toggle.en .lang-toggle-label.fr {
+      color: #999;
+      opacity: 1;
+    }
+    
+    /* Show EN label when slider is NOT on it (FR selected) */
+    .lang-toggle:not(.en) .lang-toggle-label.en {
+      color: #999;
+      opacity: 1;
+    }
+    
+  </style>  </style>  </style>
+</head>
+<body>
+    <div style="position: fixed; top: 20px; left: 440px; z-index: 1000;">
+      <button id="lang-toggle" style="padding: 8px 16px; background: white; border: 2px solid #4285f4; border-radius: 20px; font-size: 14px; font-weight: 500; cursor: pointer; color: #4285f4; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">FR / EN</button>
+    </div>
+
+
+<!-- Password Protection Screen -->
+<div class="welcome-overlay" id="password-overlay" style="display: flex;">
+  <div class="welcome-popup" style="max-width: 400px;">
+    <!-- Language Toggle -->
+    <div class="lang-toggle-container">
+      <div class="lang-toggle" id="password-lang-toggle">
+        <div class="lang-toggle-slider">FR</div>
+        <div class="lang-toggle-labels">
+          <span class="lang-toggle-label fr">FR</span>
+          <span class="lang-toggle-label en">EN</span>
+        </div>
+      </div>
+    </div>
+    
+    <div style="text-align: center; margin-bottom: 24px;">
+      <div style="width: 80px; height: 80px; margin: 0 auto 16px; background: #003366; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 40px;">
+        🔒
+      </div>
+      <h2 style="margin: 0 0 12px 0; font-size: 24px; color: #333;" data-en="Access Required" data-fr="Accès requis">Accès requis</h2>
+      <p style="margin: 0; color: #666; font-size: 14px;" data-en="Please enter the password to access the tool." data-fr="Veuillez entrer le mot de passe pour accéder à l'outil.">Veuillez entrer le mot de passe pour accéder à l'outil.</p>
+    </div>
+    <input type="password" id="password-input" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 6px; margin-bottom: 16px; font-size: 15px; box-sizing: border-box;" placeholder="Mot de passe">
+    <button class="welcome-btn primary" id="password-submit" style="width: 100%;" data-en="Enter" data-fr="Entrer">Entrer</button>
+    <p id="password-error" style="color: #ea4335; margin-top: 12px; display: none; font-size: 13px; text-align: center;" data-en="Incorrect password" data-fr="Mot de passe incorrect">Mot de passe incorrect</p>
+  </div>
+</div>
+
+<!-- Welcome Popup -->
+<div class="welcome-overlay" id="welcome-overlay" style="display: none;">
+  <div class="welcome-popup">
+    <!-- Language Toggle -->
+    <div class="lang-toggle-container">
+      <div class="lang-toggle" id="welcome-lang-toggle">
+        <div class="lang-toggle-slider">FR</div>
+        <div class="lang-toggle-labels">
+          <span class="lang-toggle-label fr">FR</span>
+          <span class="lang-toggle-label en">EN</span>
+        </div>
+      </div>
+    </div>
+    
+    <div style="text-align: center; margin-bottom: 20px;">
+      <div style="font-family: 'Arial Black', sans-serif; font-size: 48px; font-weight: 900; color: #4285f4; text-transform: uppercase; letter-spacing: 2px; transform: skew(-5deg); text-shadow: 3px 3px 0px rgba(0,0,0,0.2), -1px -1px 0px rgba(255,255,255,0.3);">
+        Montréal
+      </div>
+    </div>
+    
+    <h1 class="welcome-title">Tag ta Ville</h1>
+    
+    <p class="welcome-text" data-en="You know your neighbourhood better than anyone." data-fr="Vous connaissez votre quartier mieux que quiconque.">
+      Vous connaissez votre quartier mieux que quiconque.
+    </p>
+    <p class="welcome-text" data-en="This tool lets you highlight places that improve urban quality of life, and those that don't." data-fr="Cet outil vous permet d'identifier les endroits qui sont améliorent la qualité de vie urbaine, et ceux qui y nuisent.">
+      Cet outil vous permet d'identifier les endroits qui sont améliorent la qualité de vie urbaine, et ceux qui y nuisent.
+    </p>
+    <p class="welcome-text" data-en="Your input helps researchers better understand how urban spaces are experienced in daily life—and how they can be improved. It's quick, anonymous, and based entirely on what you notice when moving through your area." data-fr="Votre contribution aide les chercheurs à mieux comprendre comment les espaces urbains sont vécus au quotidien—et comment ils peuvent être améliorés. C'est rapide, anonyme, et basé entièrement sur ce que vous observez en vous déplaçant dans votre quartier.">
+      Votre contribution aide les chercheurs à mieux comprendre comment les espaces urbains sont vécus au quotidien—et comment ils peuvent être améliorés. C'est rapide, anonyme, et basé entièrement sur ce que vous observez en vous déplaçant dans votre quartier.
+    </p>
+    
+    <div class="welcome-buttons">
+      <button class="welcome-btn secondary" id="more-info-btn" data-en="About this projet" data-fr="À propos de ce projet">À propos de ce projet</button>
+      <button class="welcome-btn primary" id="start-btn" data-en="Get Started" data-fr="Commencer">Commencer</button>
+    </div>
+    
+    <!-- Logos -->
+    <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #e8e8e8; display: flex; align-items: center; justify-content: center; gap: 32px; flex-wrap: wrap;">
+      <img src="ivado-logo.png" alt="IVADO" style="height: 40px; object-fit: contain;">
+      <img src="udem-logo.svg" alt="Université de Montréal" style="height: 50px; object-fit: contain;">
+    </div>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<!-- Main Control Panel - Top Left -->
+<div class="panel main-panel">
+  <h2>Tag ta Ville</h2>
+  
+  <!-- STEP 1: Select & Load -->
+  <div class="step-section" id="step1">
+    <div class="step-header"><span data-en="Step 1: Select Your Neighbourhood" data-fr="Étape 1 : Sélectionnez votre quartier">Étape 1 : Sélectionnez votre quartier</span></div>
+    
+    <span class="step-label"><span data-en="Choose Method" data-fr="Choisissez la méthode">Choisissez la méthode</span></span>
+    <div class="button-group">
+      <button class="btn active" id="btn-click"><span data-en="Click Map" data-fr="Cliquer sur la carte">Cliquer sur la carte</span></button>
+      <button class="btn" id="btn-address"><span data-en="Enter Address" data-fr="Entrer une adresse">Entrer une adresse</span></button>
+    </div>
+    
+    <div class="hidden" id="address-section">
+      <input 
+        type="text" 
+        class="address-input" 
+        id="address-input" 
+        placeholder="..."
+        autocomplete="off"
+      />
+      <div class="address-suggestions hidden" id="address-suggestions"></div>
+    </div>
+    
+    <div id="click-instruction">
+      <div class="instruction">
+        <span data-en="Click anywhere on the map to select your center point. You can click again to move it." data-fr="Cliquez n'importe où sur la carte pour sélectionner votre point central. Vous pouvez cliquer à nouveau pour le déplacer.">Cliquez n'importe où sur la carte pour sélectionner votre point central. Vous pouvez cliquer à nouveau pour le déplacer.</span>
+        <div style="margin-top: 8px; font-size: 12px; color: #999;">
+          <span data-en="Use arrow keys" data-fr="Utilisez les flèches">Utilisez les flèches</span> ← → ↑ ↓ <span data-en="to navigate the map" data-fr="pour naviguer sur la carte">pour naviguer sur la carte</span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="hidden" id="location-selected">
+      <div class="selected-info">
+        <div><strong data-fr="Quartier sélectionné (1 km)" data-en="Neighbourhood Selected (1 km)">Quartier sélectionné (1 km)</strong></div>
+        <div id="coords-display">Waiting...</div>
+      </div>
+      <button class="confirm-btn" id="confirm-btn" data-fr="Visualiser mon quartier" data-en="Visualize My Neighbourhood">Visualiser mon quartier</button>
+    </div>
+  </div>
+  
+  <!-- STEP 2: Paint Areas (Combined Red/Green) -->
+  <div class="step-section hidden" id="step2-paint">
+    <div class="step-header"><span data-en="Step 2: Identify Positive and Negative Areas" data-fr="Étape 2 : Identifiez les zones positives et négatives">Étape 2 : Identifiez les zones positives et négatives</span></div>
+    
+    <span class="step-label"><span data-en="Zone Type" data-fr="Type de zone">Type de zone</span></span>
+    <div class="tag-mode-selector">
+      <button class="tag-mode-btn safe-mode active" id="paint-green">
+        <span data-en="Positive Zone" data-fr="Zone positive">Zone positive</span>
+      </button>
+      <button class="tag-mode-btn danger-mode" id="paint-red">
+        <span data-en="Negative Zone" data-fr="Zone négative">Zone négative</span>
+      </button>
+    </div>
+    
+    <span class="step-label"><span data-en="Select Tool" data-fr="Sélectionnez l'outil">Sélectionnez l'outil</span></span>
+    <div class="tool-selector-row">
+      <button class="tool-btn active" id="tool-cursor">
+        <span data-en="Cursor" data-fr="Curseur">Curseur</span>
+      </button>
+      <button class="tool-btn" id="tool-paint">
+        <span data-en="Tag Can" data-fr="Peinturer">Peinturer</span>
+      </button>
+      <button class="tool-btn" id="tool-erase">
+        <span data-en="Eraser" data-fr="Effacer">Effacer</span>
+      </button>
+    </div>
+    
+    <div id="size-controls">
+      <div class="spray-size-control">
+        <label class="control-label">
+          <span id="tool-size-label" data-en="Tool Size" data-fr="Taille de l'outil">Taille de l'outil</span>: <span id="tool-size-value">10</span>m
+        </label>
+        <input type="range" min="2" max="20" value="10" class="slider" id="tool-size-slider" />
+      </div>
+    </div>
+
+    
+    <div class="paint-target-selector">
+      <label class="toggle-label">
+        <input type="checkbox" id="paint-buildings" checked />
+        <span data-en="Paint Buildings" data-fr="Peindre les bâtiments">Peindre les bâtiments</span>
+      </label>
+      <label class="toggle-label">
+        <input type="checkbox" id="paint-ground" checked />
+        <span data-en="Paint Ground" data-fr="Peindre le sol">Peindre le sol</span>
+      </label>
+    </div>
+    
+    <!-- View Controls in Step 2 -->
+    <div class="step-label" style="margin-top: 15px;"><span data-en="Display Options" data-fr="Options d'affichage">Options d'affichage</span></div>
+    <div class="paint-target-selector">
+      <label class="toggle-label">
+        <input type="checkbox" id="toggle-buildings" checked />
+        <span data-en="Show Buildings" data-fr="Afficher les bâtiments">Afficher les bâtiments</span>
+      </label>
+      <label class="toggle-label">
+        <input type="checkbox" id="toggle-trees" checked />
+        <span data-en="Show Trees" data-fr="Afficher les arbres">Afficher les arbres</span>
+      </label>
+      <label class="toggle-label">
+        <input type="checkbox" id="toggle-satellite" />
+        <span data-en="Satellite View" data-fr="Vue satellite">Vue satellite</span>
+      </label>
+    </div>
+    
+    <button class="clear-btn" id="clear-all-paint-btn"><span data-en="Clear All" data-fr="Tout effacer">Tout effacer</span></button>
+    
+    <button class="back-btn" id="back-from-step2">
+      <span data-en="← Go Back" data-fr="← Retour">← Retour</span>
+    </button>
+    
+    <button class="next-btn" id="next-to-tag-clusters-btn">
+      <span data-en="Next: Label Tagged Areas →" data-fr="Suivant : Étiqueter les zones →">Suivant : Étiqueter les zones →</span>
+    </button>
+  </div>
+  
+  <!-- STEP 3: Tag Clusters (One at a time) -->
+  <div class="step-section hidden" id="step3-tag-clusters">
+    <div class="step-header">
+      <span data-en="Step 3: Area" data-fr="Étape 3 : Zone">Étape 3 : Zone</span> <span id="cluster-number">1</span> <span data-en="of" data-fr="de">de</span> <span id="cluster-total">5</span>
+    </div>
+    
+    <div class="cluster-type-badge" id="cluster-type-badge">
+      Disliked Area
+    </div>
+    
+    <div class="cluster-size" id="cluster-size">
+      97 voxels
+    </div>
+    
+    <div class="submit-info" style="margin-bottom: 20px;">
+      <span data-en="Select all that applies" data-fr="Sélectionnez tout ce qui s'applique">Sélectionnez tout ce qui s'applique</span>:
+    </div>
+    
+    <div id="tag-categories-container"></div>
+    
+    <textarea 
+      class="cluster-comment-full" 
+      id="current-cluster-comment" 
+      data-placeholder-en="Additional comments (optional)..."
+      data-placeholder-fr="Commentaires additionnels (optionnel)..."
+      placeholder="Commentaires additionnels (optionnel)..."></textarea>
+    
+    <button class="back-btn" id="back-from-step3" style="margin-top: 20px; margin-bottom: 15px;">
+      <span data-en="← Back to Painting" data-fr="← Retour à la peinture">← Retour à la peinture</span>
+    </button>
+    
+    <div class="cluster-nav-buttons">
+      <button class="nav-cluster-btn" id="prev-cluster-btn" disabled>
+        <span data-en="← Previous" data-fr="← Précédent">← Précédent</span>
+      </button>
+      <button class="nav-cluster-btn skip" id="skip-cluster-btn">
+        <span data-en="Skip" data-fr="Passer">Passer</span>
+      </button>
+      <button class="nav-cluster-btn primary" id="next-cluster-btn">
+        <span data-en="Next →" data-fr="Suivant →">Suivant →</span>
+      </button>
+    </div>
+  </div>
+  
+  <!-- STEP 4: Submit -->
+  <div class="step-section hidden" id="step4-submit">
+    <div class="step-header"><span data-en="Step 4: Submit Your Tags" data-fr="Étape 4 : Soumettre vos étiquettes">Étape 4 : Soumettre vos étiquettes</span></div>
+    
+    <div class="submit-info">
+      <span data-en="Your tagged areas and labels will be saved for safety analysis and urban planning." data-fr="Vos zones étiquetées seront enregistrées pour l'analyse de la sécurité et la planification urbaine.">Vos zones étiquetées seront enregistrées pour l'analyse de la sécurité et la planification urbaine.</span>
+    </div>
+    
+    <button class="back-btn" id="back-from-step4" style="margin-bottom: 15px;">
+      <span data-en="← Back to Tags" data-fr="← Retour aux étiquettes">← Retour aux étiquettes</span>
+    </button>
+    
+    <button class="submit-btn" id="submit-btn">
+      <span data-en="Submit" data-fr="Soumettre">Soumettre</span>
+    </button>
+  </div>
+  
+  <button class="reset-btn hidden" id="reset-btn"><span data-en="Reset & Start Over" data-fr="Réinitialiser">Réinitialiser</span></button>
+</div>
+
+</div>
+
+<!-- <span data-en="View Controls" data-fr="Contrôles de vue">Contrôles de vue</span> - Top Right -->
+<div class="panel view-controls">
+  <h3><span data-en="View Controls" data-fr="Contrôle de vue">Contrôle de vue</span></h3>
+  
+  <div class="control-group">
+    <label class="control-label">
+      <span data-en="Viewing Angle:" data-fr="Angle de vue :">Angle de vue :</span> <span id="pitch-value">45</span>°
+    </label>
+    <input type="range" min="0" max="85" value="45" class="slider" id="pitch-slider" />
+  </div>
+  
+  <!-- View controls removed from Step 1 - now only in Step 2 -->
+</div>
+
+<!-- On-Screen Map Navigation - Visible in Step 1 & 2 -->
+<div class="map-nav-controls" id="map-nav-controls">
+  <div class="map-nav-grid">
+    <div></div>
+    <button class="map-nav-btn" id="map-nav-up" title="Pan Up">↑</button>
+    <button class="map-nav-btn rotate" id="map-rotate-left" title="Rotate Left">↶</button>
+    <button class="map-nav-btn" id="map-nav-left" title="Pan Left">←</button>
+    <button class="map-nav-btn zoom" id="map-zoom-in" title="Zoom In">+</button>
+    <button class="map-nav-btn" id="map-nav-right" title="Pan Right">→</button>
+    <button class="map-nav-btn rotate" id="map-rotate-right" title="Rotate Right">↷</button>
+    <button class="map-nav-btn" id="map-nav-down" title="Pan Down">↓</button>
+    <button class="map-nav-btn zoom" id="map-zoom-out" title="Zoom Out">−</button>
+  </div>
+  <div class="map-nav-label"><span data-en="Navigate, rotate & zoom" data-fr="Naviguer, pivoter et zoomer">Naviguer, pivoter et zoomer</span></div>
+</div>
+
+<script>
+mapboxgl.accessToken = 'pk.eyJ1IjoiZXZlbHluZWJyaWUiLCJhIjoiY2themE5OGF2MDdxazJybG9oNzUyaXoxNSJ9.njPe2lcTp82DKjDeGkHaQA';
+
+const MONTREAL_CENTER = [-73.5673, 45.5017];
+const MONTREAL_GRID_ROTATION = -33;
+const RADIUS_KM = 1;
+
+let map, selectedPoint = null, selectionMode = 'click', centerMarker = null;
+let allBuildingsData = null, allTreesData = [], dataLoaded = false;
+let voxelsLoaded = false;
+let currentPaintColor = 'liked'; // 'disliked' or 'liked' - DEFAULT TO LIKED
+let currentTool = 'cursor';
+let clickMapMode = false; // Only true when 'Click Map' button is clicked // Start with cursor for free exploration // 'cursor', 'paint', 'erase'
+let toolSize = 10; // DEFAULT 10M
+let paintBuildings = true;
+let paintGround = true;
+let groundPaintMarkers = [];
+let dislikedVoxels = new Set();
+let likedVoxels = new Set();
+let allVoxelFeatures = [];
+let voxelSpatialIndex = null;
+let isDragging = false;
+let clusterLabels = {};
+let clusterMarkers = [];
+let selectedClusterId = null;
+let lastPaintTime = 0;
+let paintQueue = [];
+let updateScheduled = false;
+let currentClusterIndex = 0;
+let allClusters = [];
+let selectedPaintHeight = 0; // Default to ground level
+let paintedOverlays = []; // Store painted overlay features
+let overlayIdCounter = 0;
+
+let voxelOriginalHeights = new Map(); // Store original heights: voxelIndex -> {base, height}
+
+
+
+// Custom Alert System - Fix 6
+function showCustomAlert(title, message) {
+  const overlay = document.createElement('div');
+  overlay.className = 'custom-alert-overlay';
+  overlay.innerHTML = `
+    <div class="custom-alert">
+      <h3>${title}</h3>
+      <div class="custom-alert-content">${message}</div>
+      <button class="custom-alert-button" onclick="this.closest('.custom-alert-overlay').remove()">
+        OK
+      </button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+}
+
+function showCustomConfirm(title, message, onConfirm) {
+  const overlay = document.createElement('div');
+  overlay.className = 'custom-alert-overlay';
+  const lang = (typeof currentLang !== 'undefined') ? currentLang : 'fr';
+  overlay.innerHTML = `
+    <div class="custom-alert">
+      <h3>${title}</h3>
+      <div class="custom-alert-content">${message}</div>
+      <div style="display: flex; gap: 10px; margin-top: 20px;">
+        <button class="custom-alert-button" style="background: #dc3545; flex: 1;" id="confirm-yes">
+          ${lang === 'fr' ? 'Oui' : 'Yes'}
+        </button>
+        <button class="custom-alert-button" style="background: #6c757d; flex: 1;" id="confirm-no">
+          ${lang === 'fr' ? 'Non' : 'No'}
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  
+  overlay.querySelector('#confirm-yes').addEventListener('click', () => {
+    overlay.remove();
+    onConfirm(true);
+  });
+  
+  overlay.querySelector('#confirm-no').addEventListener('click', () => {
+    overlay.remove();
+    onConfirm(false);
+  });
+  
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      overlay.remove();
+      onConfirm(false);
+    }
+  });
+}
+
+// Tag options for Step 3 — aligned with French version
+const TAG_OPTIONS = {
+  "Safety": {
+    positive: [
+      "Adequate nighttime lighting",
+      "Good visibility and clear sightlines",
+      "Adequate and readable road signage",
+      "Predictable pedestrian crossings",
+      "Appropriate vehicle speeds",
+      "Protected cycling infrastructure",
+      "Continuous and unobstructed sidewalks",
+      "Safe intersection"
+    ],
+    negative: [
+      "Insufficient or uneven lighting",
+      "Obstructed visibility or blind spots",
+      "Missing, inadequate, or unclear road signage",
+      "Unclear or dangerous pedestrian crossings",
+      "Excessive vehicle speeds",
+      "Missing or unprotected cycling infrastructure",
+      "Sidewalk discontinuities or obstacles",
+      "Unsafe intersection"
+    ]
+  },
+
+  "Cleanliness & Maintenance": {
+    positive: [
+      "Clean ground surfaces free of waste",
+      "Roadway in good condition",
+      "Functional street furniture",
+      "Well-maintained building facades",
+      "Well-managed and maintained vegetation",
+      "Well-managed construction sites"
+    ],
+    negative: [
+      "Accumulation of dirt or waste",
+      "Roadway in poor condition (e.g., potholes)",
+      "Damaged or unusable street furniture",
+      "Neglected or vandalized facades",
+      "Overgrown or neglected vegetation",
+      "Prolonged or poorly managed construction sites (e.g., excessive cones or barriers)"
+    ]
+  },
+
+  "Atmosphere": {
+    positive: [
+      "Pedestrian-oriented streets",
+      "Comfortable noise levels",
+      "Visible presence of art and culture",
+      "Spaces that encourage stopping and socializing",
+      "General sense of personal safety"
+    ],
+    negative: [
+      "Vehicle-dominated streets",
+      "Excessive or disruptive noise",
+      "Lack of artistic or cultural elements",
+      "Spaces discouraging presence or social interaction",
+      "General sense of insecurity"
+    ]
+  },
+
+  "Access and Services": {
+    positive: [
+      "Reliable access to public transit",
+      "Adequate and well-maintained transit shelters",
+      "Proximity to essential daily services (e.g., food, retail)",
+      "Barrier-free area accessible to everyone"
+    ],
+    negative: [
+      "Limited or no access to public transit",
+      "Missing or inadequate transit shelters",
+      "Essential services far away or difficult to access",
+      "Barriers preventing access for some people"
+    ]
+  },
+
+  "Seasonal Conditions": {
+    positive: [
+      "SPRING No meltwater accumulation",
+      "SUMMER Presence of shade",
+      "SUMMER Access to water for cooling",
+      "FALL Fallen leaves cleared",
+      "WINTER Snow and ice cleared from public space",
+      "WINTER Non-slippery surfaces"
+    ],
+    negative: [
+      "SPRING Meltwater accumulation",
+      "SUMMER Lack of shade",
+      "SUMMER No accessible water points",
+      "FALL Accumulation of fallen leaves",
+      "WINTER Snow or ice obstructing public space",
+      "WINTER Slippery surfaces"
+    ]
+  }
+};
+
+
+const TAG_OPTIONS_FR = {
+  "Sécurité": {
+    positive: [
+      "Éclairage nocturne adéquat",
+      "Bonne visibilité et angles de vue dégagés",
+      "Signalisation routière adéquate et lisible",
+      "Traversées piétonnes prévisibles",
+      "Vitesse adéquate des véhicules",
+      "Infrastructures cyclables protégées",
+      "Trottoirs accessibles et sécuritaires",
+      "Intersection sécuritaire"
+    ],
+    negative: [
+      "Éclairage insuffisant ou inégal",
+      "Visibilité obstruée ou angles morts",
+      "Signalisation routière absente, inadéquate ou peu lisible",
+      "Traversées piétonnes peu claires ou dangereuses",
+      "Vitesse excessive des véhicules",
+      "Infrastructures cyclables absentes ou non protégées",
+      "Discontinuités ou obstacles sur les trottoirs",
+      "Intersection peu sécuritaire"
+    ]
+  },
+  "Propreté et entretien": {
+    positive: [
+      "Surfaces au sol propres et sans déchets",
+      "Chaussée en bon état",
+      "Mobilier urbain fonctionnel",
+      "Façades de bâtiments bien entretenues",
+      "Végétation bien maîtrisée et entretenue",
+      "Chantiers bien gérés"
+    ],
+    negative: [
+      "Accumulation de saleté ou de déchets",
+      "Chaussée en mauvais état (ex.: nids-de-poule)",
+      "Mobilier urbain endommagé ou inutilisable",
+      "Façades négligées ou vandalisées",
+      "Végétation envahissante ou négligée",
+      "Chantiers prolongés ou mal gérés (ex. : cônes excessifs ou barrières excessives)"
+    ]
+  },
+  "Atmosphère": {
+    positive: [
+      "Rues conçues pour les piétons",
+      "Niveaux sonores confortables",
+      "Présence visible d'art et de culture",
+      "Espaces invitant à s'arrêter et à socialiser",
+      "Sentiment général de sécurité personnelle"
+    ],
+    negative: [
+      "Rues dominées par les véhicules",
+      "Bruit excessif ou perturbateur",
+      "Absence d'éléments artistiques ou culturels",
+      "Espaces décourageant la présence ou la socialisation",
+      "Sentiment général d'insécurité"
+    ]
+  },
+  "Accès et services": {
+    positive: [
+      "Accès fiable au transport collectif",
+      "Abris de transport collectif adéquats et bien entretenus",
+      "Proximité de services essentiels au quotidien (ex. : alimentation, commerces)",
+      "Zone sans obstacles et accessible à toutes et tous"
+    ],
+    negative: [
+      "Accès limité ou absent au transport collectif",
+      "Abris de transport collectif absents ou inadéquats",
+      "Services essentiels éloignés ou difficiles d'accès",
+      "Obstacles empêchant l'accès pour certaines personnes"
+    ]
+  },
+  "Conditions saisonnières": {
+    positive: [
+      "PRINTEMPS Pas d'accumulation d’eau de fonte",
+      "ÉTÉ Présence d'ombre",
+      "ÉTÉ Accès à l'eau pour se rafraîchir",
+      "AUTOMNE Feuilles mortes ramassées",
+      "HIVER Neige et glace dégagées de l'espace public",
+      "HIVER Surfaces non-glissantes"
+    ],
+    negative: [
+      "PRINTEMPS Accumulation d’eau de fonte",
+      "ÉTÉ Absence d'ombre",
+      "ÉTÉ Absence de points d'eau accessibles",
+      "AUTOMNE Accumulation de feuilles mortes",
+      "HIVER Neige ou glace obstruant l'espace public",
+      "HIVER Surfaces glissantes"
+    ]
+  }
+};
+
+
+// Performance Optimization - Fix 2
+let updateBatchTimeout = null;
+let lastUpdateHash = '';
+
+function batchUpdateVoxels() {
+  if (updateBatchTimeout) return;
+  updateBatchTimeout = setTimeout(() => {
+    updateVoxelColors();
+    updateBatchTimeout = null;
+  }, 16); // ~60fps
+}
+
+// Welcome popup handlers
+
+// Wait for DOM to be fully loaded before adding event listeners
+document.addEventListener('DOMContentLoaded', () => {
+
+// Language system
+let currentLang = 'fr'; // Default French
+
+function switchLanguage(lang) {
+  currentLang = lang;
+  document.querySelectorAll('[data-en]').forEach(el => {
+    el.textContent = el.getAttribute('data-' + lang);
+  });
+  
+  // Update placeholders
+  if (lang === 'fr') {
+    document.getElementById('address-input').placeholder = 'Entrez une adresse à Montréal';
+    document.getElementById('password-input').placeholder = 'Mot de passe';
+  } else {
+    document.getElementById('address-input').placeholder = 'Enter an address in Montreal';
+    document.getElementById('password-input').placeholder = 'Password';
+  }
+  
+  // Update additional comments placeholder
+  const commentTextarea = document.getElementById('current-cluster-comment');
+  if (commentTextarea) {
+    commentTextarea.placeholder = lang === 'fr' 
+      ? 'Commentaires additionnels (optionnel)...' 
+      : 'Additional comments (optional)...';
+  }
+}
+
+
+// Password popup language toggle
+document.getElementById('password-lang-toggle').addEventListener('click', function() {
+  const toggle = this;
+  const slider = toggle.querySelector('.lang-toggle-slider');
+  
+  if (toggle.classList.contains('en')) {
+    toggle.classList.remove('en');
+    slider.textContent = 'FR';
+    switchLanguage('fr');
+  } else {
+    toggle.classList.add('en');
+    slider.textContent = 'EN';
+    switchLanguage('en');
+  }
+});
+
+// Welcome popup language toggle
+document.getElementById('welcome-lang-toggle').addEventListener('click', function() {
+  const toggle = this;
+  const slider = toggle.querySelector('.lang-toggle-slider');
+  
+  if (toggle.classList.contains('en')) {
+    // Switch to French
+    toggle.classList.remove('en');
+    slider.textContent = 'FR';
+    switchLanguage('fr');
+  } else {
+    // Switch to English
+    toggle.classList.add('en');
+    slider.textContent = 'EN';
+    switchLanguage('en');
+  }
+});
+
+// Language toggle button
+document.getElementById('lang-toggle').addEventListener('click', () => {
+  currentLang = currentLang === 'fr' ? 'en' : 'fr';
+  switchLanguage(currentLang);
+});
+
+// Password protection
+const CORRECT_PASSWORD = 'ojiW6TK3rP*LiEf';
+
+document.getElementById('password-submit').addEventListener('click', () => {
+  const input = document.getElementById('password-input').value;
+  if (input === CORRECT_PASSWORD) {
+    document.getElementById('password-overlay').style.display = 'none';
+    document.getElementById('welcome-overlay').style.display = 'flex';
+  } else {
+    document.getElementById('password-error').style.display = 'block';
+  }
+});
+
+// Allow Enter key to submit password
+document.getElementById('password-input').addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') {
+    document.getElementById('password-submit').click();
+  }
+});
+
+document.getElementById('start-btn').addEventListener('click', () => {
+  document.getElementById('welcome-overlay').style.display = 'none';
+  // Show map navigation controls
+  document.getElementById('map-nav-controls').classList.add('active');
+});
+
+document.getElementById('more-info-btn').addEventListener('click', () => {
+  // Show research info popup
+  const title = currentLang === 'fr' ? 'À propos de la recherche' : 'About the Research';
+  const message = currentLang === 'fr' 
+    ? 'Ce projet est dirigé par Evelyne Brie, professeure adjointe en sciences politiques affiliée à IVADO à l\'Université de Montréal.<br><br>Ses recherches portent sur la cohésion sociale, les inégalités structurelles et la prise de décision en matière de politique urbaine, en utilisant des méthodes quantitatives, des expériences et des outils basés sur les données.<br><br>Tag ta Ville fait partie de ce travail, utilisant la cartographie participative pour mieux comprendre comment les gens vivent la sécurité et le confort dans leurs environnements urbains quotidiens.<br><br>Pour en savoir plus sur ses recherches : <a href="https://www.evelynebrie.com/" target="_blank" style="color: #4285f4;">evelynebrie.com</a>.'
+    : 'This project is led by Evelyne Brie, an IVADO-affiliated Assistant Professor of Political Science at the Université de Montréal.<br><br>Her research focuses on social cohesion, structural inequalities, and urban policy-making using quantitative methods, experiments, and data-driven tools.<br><br>Tag ta Ville is part of this work, using participatory mapping to better understand how people experience safety and comfort in their everyday urban environments.<br><br>Learn more about her research at <a href="https://www.evelynebrie.com/" target="_blank" style="color: #4285f4;">evelynebrie.com</a>.';
+  showCustomAlert(title, message);
+});
+
+// Confirm button - load neighbourhood
+document.getElementById('confirm-btn').addEventListener('click', async () => {
+  console.log('=== CONFIRM BUTTON CLICKED ===');
+  console.log('selectedPoint:', selectedPoint);
+  console.log('dataLoaded:', dataLoaded);
+  console.log('allBuildingsData length:', allBuildingsData?.length);
+  
+  if (!selectedPoint) {
+    const title = currentLang === 'fr' ? 'Avis' : 'Notice';
+    const message = currentLang === 'fr' 
+      ? 'Veuillez d\'abord sélectionner un point sur la carte.' 
+      : 'Please first select a point on the map.';
+    showCustomAlert(title, message);
+    return;
+  }
+  
+  if (!dataLoaded) {
+    const title = currentLang === 'fr' ? 'Avis' : 'Notice';
+    const message = currentLang === 'fr' 
+      ? 'Les données sont toujours en cours de chargement. Veuillez patienter un instant et réessayer.' 
+      : 'Data is still loading. Please wait a moment and try again.';
+    showCustomAlert(title, message);
+    return;
+  }
+  
+  if (!allBuildingsData || allBuildingsData.length === 0) {
+    const title = currentLang === 'fr' ? 'Avis' : 'Notice';
+    const message = currentLang === 'fr' 
+      ? 'Les données de bâtiments ne sont pas encore chargées. Veuillez patienter et réessayer.' 
+      : 'Building data is not yet loaded. Please wait and try again.';
+    showCustomAlert(title, message);
+    return;
+  }
+  
+  console.log('✓ Proceeding to Step 2...');
+  console.log('✓ Loading voxels and trees...');
+  
+  // Switch to Step 2
+  const step1 = document.getElementById('step1');
+  const step2 = document.getElementById('step2-paint');
+  
+  if (step1) step1.classList.add('hidden');
+  if (step2) step2.classList.remove('hidden');
+  currentStep = 2;
+  
+  // Load the voxels and trees
+  try {
+    await loadVoxelsAndTrees(selectedPoint);
+    console.log('✓ Voxels and trees loaded successfully');
+  } catch (error) {
+    console.error('✗ Error loading voxels:', error);
+    const title = currentLang === 'fr' ? 'Erreur' : 'Error';
+    const message = currentLang === 'fr' 
+      ? 'Échec du chargement des données du bâtiment. Veuillez réessayer.' 
+      : 'Failed to load building data. Please try again.';
+    showCustomAlert(title, message);
+  }
+});
+
+// Map navigation controls
+const MAP_PAN_DISTANCE = 100;
+const MAP_ROTATE_ANGLE = 15;
+
+document.getElementById('map-nav-up').addEventListener('click', () => {
+  map.panBy([0, -MAP_PAN_DISTANCE]);
+});
+
+document.getElementById('map-nav-down').addEventListener('click', () => {
+  map.panBy([0, MAP_PAN_DISTANCE]);
+});
+
+document.getElementById('map-nav-left').addEventListener('click', () => {
+  map.panBy([-MAP_PAN_DISTANCE, 0]);
+});
+
+document.getElementById('map-nav-right').addEventListener('click', () => {
+  map.panBy([MAP_PAN_DISTANCE, 0]);
+});
+
+document.getElementById('map-rotate-left').addEventListener('click', () => {
+  const current = map.getBearing();
+  map.easeTo({ bearing: current - MAP_ROTATE_ANGLE, duration: 300 });
+});
+
+document.getElementById('map-rotate-right').addEventListener('click', () => {
+  const current = map.getBearing();
+  map.easeTo({ bearing: current + MAP_ROTATE_ANGLE, duration: 300 });
+});
+
+// Zoom controls
+document.getElementById('map-zoom-in').addEventListener('click', () => {
+  map.zoomIn({ duration: 300 });
+});
+
+document.getElementById('map-zoom-out').addEventListener('click', () => {
+  map.zoomOut({ duration: 300 });
+});
+
+// Keyboard navigation with live visual feedback
+document.addEventListener('keydown', (e) => {
+  // Only respond to arrow keys when not typing in an input
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  
+  let buttonId = null;
+  
+  switch(e.key) {
+    case 'ArrowUp':
+      e.preventDefault();
+      map.panBy([0, -MAP_PAN_DISTANCE]);
+      buttonId = 'map-nav-up';
+      break;
+    case 'ArrowDown':
+      e.preventDefault();
+      map.panBy([0, MAP_PAN_DISTANCE]);
+      buttonId = 'map-nav-down';
+      break;
+    case 'ArrowLeft':
+      e.preventDefault();
+      map.panBy([-MAP_PAN_DISTANCE, 0]);
+      buttonId = 'map-nav-left';
+      break;
+    case 'ArrowRight':
+      e.preventDefault();
+      map.panBy([MAP_PAN_DISTANCE, 0]);
+      buttonId = 'map-nav-right';
+      break;
+  }
+  
+  // Highlight the button
+  if (buttonId) {
+    const button = document.getElementById(buttonId);
+    if (button) {
+      button.classList.add('active-press');
+    }
+  }
+});
+
+document.addEventListener('keyup', (e) => {
+  // Remove highlight when key is released
+  const keyMap = {
+    'ArrowUp': 'map-nav-up',
+    'ArrowDown': 'map-nav-down',
+    'ArrowLeft': 'map-nav-left',
+    'ArrowRight': 'map-nav-right'
+  };
+  
+  const buttonId = keyMap[e.key];
+  if (buttonId) {
+    const button = document.getElementById(buttonId);
+    if (button) {
+      button.classList.remove('active-press');
+    }
+  }
+});
+
+// Initialize map
+map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/mapbox/light-v11',
+  center: MONTREAL_CENTER,
+  zoom: 12,
+  pitch: 45,
+  bearing: -17,
+  antialias: true
+});
+
+map.on('load', () => {
+  console.log('Map loaded');
+  loadAllData();
+});
+
+// Update pitch value live
+map.on('pitch', () => {
+  const currentPitch = Math.round(map.getPitch());
+  document.getElementById('pitch-value').textContent = currentPitch;
+  document.getElementById('pitch-slider').value = currentPitch;
+});
+
+// Load all data
+async function loadAllData() {
+  console.log('Starting data load...');
+  
+  try {
+    const response = await fetch('./tiles/tile_manifest.json');
+    const manifest = await response.json();
+    
+    const tilePromises = manifest.tiles.map(async (tile) => {
+      const resp = await fetch(`./tiles/${tile.file}`);
+      const blob = await resp.blob();
+      const buffer = await blob.arrayBuffer();
+      const decompressed = pako.ungzip(new Uint8Array(buffer), { to: 'string' });
+      return JSON.parse(decompressed).features;
+    });
+    
+    const allTiles = await Promise.all(tilePromises);
+    allBuildingsData = allTiles.flat();
+    console.log(`✓ Loaded ${allBuildingsData.length} buildings`);
+  } catch (error) {
+    console.error('Error loading buildings:', error);
+    // Retry once after a short delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    try {
+      const response = await fetch('./tiles/tile_manifest.json');
+      const manifest = await response.json();
+      const tilePromises = manifest.tiles.map(async (tile) => {
+        const resp = await fetch(`./tiles/${tile.file}`);
+        const blob = await resp.blob();
+        const buffer = await blob.arrayBuffer();
+        const decompressed = pako.ungzip(new Uint8Array(buffer), { to: 'string' });
+        return JSON.parse(decompressed).features;
+      });
+      const allTiles = await Promise.all(tilePromises);
+      allBuildingsData = allTiles.flat();
+      console.log(`✓ Loaded ${allBuildingsData.length} buildings on retry`);
+    } catch (retryError) {
+      console.error('Failed to load buildings after retry:', retryError);
+    }
+  }
+  
+  const treeFiles = ['arbres-part-aa.csv', 'arbres-part-ab.csv', 'arbres-part-ac.csv',
+                     'arbres-part-ad.csv', 'arbres-part-ae.csv', 'arbres-part-af.csv', 'arbres-part-ag.csv'];
+  
+  let loaded = 0;
+  let hasError = false;
+  
+  treeFiles.forEach(file => {
+    Papa.parse(file, {
+      download: true,
+      header: true,
+      complete: (r) => {
+        allTreesData = allTreesData.concat(r.data);
+        loaded++;
+        if (loaded === treeFiles.length) {
+          console.log(`✓ Loaded ${allTreesData.length} trees`);
+          dataLoaded = true;
+          console.log('✓ All data loaded successfully');
+        }
+      },
+      error: (e) => { 
+        console.error(`Error loading ${file}:`, e);
+        loaded++;
+        hasError = true;
+        if (loaded === treeFiles.length) {
+          if (hasError) {
+            console.warn('Some tree files failed to load, but continuing...');
+          }
+          dataLoaded = true;
+          console.log('✓ Data loading complete (with some errors)');
+        }
+      }
+    });
+  });
+  
+  // Timeout fallback - mark as loaded after 5 seconds even if trees fail
+  setTimeout(() => {
+    if (!dataLoaded) {
+      console.warn('Data loading timeout - marking as loaded');
+      dataLoaded = true;
+    }
+  }, 5000);
+}
+
+// Mode selection
+document.getElementById('btn-click').addEventListener('click', () => {
+  selectionMode = 'click';
+  document.getElementById('btn-click').classList.add('active');
+  document.getElementById('btn-address').classList.remove('active');
+  document.getElementById('address-section').classList.add('hidden');
+});
+
+document.getElementById('btn-address').addEventListener('click', () => {
+  selectionMode = 'address';
+  document.getElementById('btn-address').classList.add('active');
+  document.getElementById('btn-click').classList.remove('active');
+  document.getElementById('address-section').classList.remove('hidden');
+  document.getElementById('address-input').focus();
+});
+
+// Address autocomplete
+let addressTimeout;
+document.getElementById('address-input').addEventListener('input', (e) => {
+  const query = e.target.value.trim();
+  
+  if (query.length < 3) {
+    document.getElementById('address-suggestions').classList.add('hidden');
+    return;
+  }
+  
+  clearTimeout(addressTimeout);
+  addressTimeout = setTimeout(() => {
+    searchAddresses(query);
+  }, 300);
+});
+
+async function searchAddresses(query) {
+  const searchText = query.includes('Montreal') ? query : `${query}, Montreal, Quebec`;
+  const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(searchText)}.json?access_token=${mapboxgl.accessToken}&bbox=-73.98,45.40,-73.48,45.70&limit=5`;
+  
+  try {
+    const resp = await fetch(url);
+    const data = await resp.json();
+    
+    if (data.features && data.features.length > 0) {
+      const suggestionsDiv = document.getElementById('address-suggestions');
+      suggestionsDiv.innerHTML = '';
+      
+      data.features.forEach(feature => {
+        const div = document.createElement('div');
+        div.className = 'address-suggestion';
+        div.textContent = feature.place_name;
+        div.addEventListener('click', () => {
+          const [lng, lat] = feature.center;
+          document.getElementById('address-input').value = feature.place_name;
+          suggestionsDiv.classList.add('hidden');
+          selectPoint({ lng, lat });
+          map.flyTo({ center: [lng, lat], zoom: 16, duration: 1500 });
+        });
+        suggestionsDiv.appendChild(div);
+      });
+      
+      suggestionsDiv.classList.remove('hidden');
+    }
+  } catch (error) {
+    console.error('Geocoding error:', error);
+  }
+}
+
+// Mouse handlers
+map.on('mousedown', (e) => {
+  // Step 1: Click to select/move point
+  if (!voxelsLoaded && selectionMode === 'click') {
+    selectPoint(e.lngLat);
+    return;
+  }
+  
+  // Step 2: Paint or erase
+  if (voxelsLoaded && currentTool !== 'cursor') {
+    isDragging = true;
+    performAction([e.lngLat.lng, e.lngLat.lat]);
+  }
+});
+
+map.on('mouseup', () => {
+  isDragging = false;
+});
+
+map.on('mouseleave', () => {
+  isDragging = false;
+});
+
+map.on('mousemove', (e) => {
+  if (currentTool !== 'cursor' && voxelsLoaded && map.getSource('tool-preview')) {
+    const radiusKm = toolSize / 1000;
+    const circle = turf.circle([e.lngLat.lng, e.lngLat.lat], radiusKm, {
+      steps: 32,
+      units: 'kilometers'
+    });
+    
+    map.getSource('tool-preview').setData(circle);
+    
+    let color = currentTool === 'erase' ? '#666666' : 
+                currentPaintColor === 'disliked' ? '#ff0000' : '#00ff00';
+    
+    map.setPaintProperty('tool-preview-fill', 'fill-color', color);
+    map.setPaintProperty('tool-preview-line', 'line-color', color);
+    
+    // Throttle painting during drag - only paint every 80ms for smoother performance
+    if (isDragging) {
+      const now = Date.now();
+      if (now - lastPaintTime > 80) { // Increased from 50ms to 80ms
+        lastPaintTime = now;
+        performAction([e.lngLat.lng, e.lngLat.lat], e.point); // Pass pixel coordinates
+      }
+    }
+  }
+});
+
+function selectPoint(lngLat) {
+  selectedPoint = lngLat;
+  
+  if (centerMarker) centerMarker.remove();
+  
+  const el = document.createElement('div');
+  el.style.width = '20px';
+  el.style.height = '20px';
+  el.style.backgroundColor = '#4285f4';
+  el.style.borderRadius = '50%';
+  el.style.border = '3px solid white';
+  el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+  
+  centerMarker = new mapboxgl.Marker({ element: el })
+    .setLngLat([lngLat.lng, lngLat.lat])
+    .addTo(map);
+  
+  drawRadiusCircle(lngLat);
+  
+  document.getElementById('coords-display').textContent = 
+    `Lat: ${lngLat.lat.toFixed(4)}, Lng: ${lngLat.lng.toFixed(4)}`;
+  
+  document.getElementById('click-instruction').classList.add('hidden');
+  document.getElementById('location-selected').classList.remove('hidden');
+  
+}
+
+function drawRadiusCircle(center) {
+  const circle = turf.circle([center.lng, center.lat], RADIUS_KM, { steps: 64, units: 'kilometers' });
+  
+  if (map.getSource('radius-circle')) {
+    map.getSource('radius-circle').setData(circle);
+  } else {
+    map.addSource('radius-circle', { type: 'geojson', data: circle });
+    
+    map.addLayer({
+      id: 'radius-circle-fill',
+      type: 'fill',
+      source: 'radius-circle',
+      paint: { 'fill-color': '#4285f4', 'fill-opacity': 0.1 }
+    });
+    
+    map.addLayer({
+      id: 'radius-circle-line',
+      type: 'line',
+      source: 'radius-circle',
+      paint: { 'line-color': '#4285f4', 'line-width': 3, 'line-dasharray': [2, 2] }
+    });
+  }
+}
+
+// Back button handlers
+document.getElementById('back-from-step2').addEventListener('click', () => {
+  const lang = (typeof currentLang !== 'undefined') ? currentLang : 'fr';
+  const title = lang === 'fr' ? 'Confirmation' : 'Confirmation';
+  const message = lang === 'fr' 
+    ? 'Revenir en arrière ? Cela effacera toutes vos données et vous permettra de sélectionner une nouvelle zone.' 
+    : 'Go back? This will clear all your data and let you select a new area.';
+    
+  showCustomConfirm(title, message, (confirmed) => {
+    if (confirmed) {
+      // Remove center marker
+      if (centerMarker) { 
+        centerMarker.remove(); 
+        centerMarker = null; 
+      }
+      
+      // Remove all map layers (voxels, trees, radius circle)
+      if (map.getLayer('voxel-fill')) { 
+        map.removeLayer('voxel-fill'); 
+        map.removeSource('voxel-cubes'); 
+      }
+      if (map.getLayer('tree-cubes')) { 
+        map.removeLayer('tree-cubes'); 
+        map.removeSource('tree-cubes'); 
+      }
+      if (map.getLayer('radius-circle-fill')) { 
+        map.removeLayer('radius-circle-fill'); 
+        map.removeLayer('radius-circle-line'); 
+        map.removeSource('radius-circle'); 
+      }
+      
+      // Clear paint
+      dislikedVoxels.clear();
+      likedVoxels.clear();
+      
+      // Remove ground paint markers
+      groundPaintMarkers.forEach(paintId => {
+        if (map.getLayer(paintId)) {
+          map.removeLayer(paintId);
+          map.removeSource(paintId);
+        }
+      });
+      groundPaintMarkers = [];
+      
+      // Remove overlays
+      paintedOverlays.forEach(overlayId => {
+        try {
+          if (map.getLayer(overlayId)) map.removeLayer(overlayId);
+          if (map.getSource(overlayId)) map.removeSource(overlayId);
+        } catch(e) {}
+      });
+      paintedOverlays = [];
+      
+      // Remove cluster markers
+      clusterMarkers.forEach(marker => marker.remove());
+      clusterMarkers = [];
+      
+      // Remove tool preview
+      removeToolPreview();
+      
+      // Reset voxel data
+      voxelsLoaded = false;
+      voxelSpatialIndex = null;
+      allVoxelFeatures = [];
+      
+      // Reset state variables
+      currentTool = 'cursor';
+      currentPaintColor = 'liked';
+      isDragging = false;
+      clusterLabels = {};
+      allClusters = [];
+      selectedClusterId = null;
+      
+      // Remove selected point (wrapped in try-catch)
+      try {
+        if (typeof selectedPointMarker !== 'undefined' && selectedPointMarker) {
+          selectedPointMarker.remove();
+          selectedPointMarker = null;
+        }
+      } catch(e) {
+        console.log('selectedPointMarker cleanup skipped:', e);
+      }
+      
+      try {
+        if (typeof selectedPoint !== 'undefined') {
+          selectedPoint = null;
+        }
+      } catch(e) {
+        console.log('selectedPoint cleanup skipped:', e);
+      }
+      
+      // Re-enable map interactions
+      map.dragPan.enable();
+      map.scrollZoom.enable();
+      
+      // Hide Step 2 and other steps, Show Step 1
+      document.getElementById('step2-paint').classList.add('hidden');
+      document.getElementById('step3-tag-clusters').classList.add('hidden');
+      document.getElementById('step4-submit').classList.add('hidden');
+      document.getElementById('step1').classList.remove('hidden');
+      
+      // Reset Step 1 UI elements
+      document.getElementById('location-selected').classList.add('hidden');
+      document.getElementById('click-instruction').classList.remove('hidden');
+      document.getElementById('address-suggestions').classList.add('hidden');
+      document.getElementById('address-input').value = '';
+      
+      // Clear clusters list
+      document.getElementById('clusters-list').innerHTML = '';
+      
+      // Hide reset button
+      document.getElementById('reset-btn').classList.add('hidden');
+      
+      // Reset tool selection
+      document.getElementById('tool-cursor').classList.add('active');
+      document.getElementById('tool-paint').classList.remove('active');
+      document.getElementById('tool-erase').classList.remove('active');
+      document.getElementById('paint-green').classList.add('active');
+      document.getElementById('paint-red').classList.remove('active');
+      
+      // Hide map nav controls
+      document.getElementById('map-nav-controls').classList.remove('active');
+      
+      // Fly back to Montreal center
+      map.flyTo({
+        center: MONTREAL_CENTER,
+        zoom: 12,
+        pitch: 45,
+        bearing: -17,
+        duration: 1500
+      });
+    }
+  });
+});
+
+document.getElementById('back-from-step3').addEventListener('click', () => {
+  document.getElementById('step3-tag-clusters').classList.add('hidden');
+  document.getElementById('step2-paint').classList.remove('hidden');
+  
+  // Remove cluster markers
+  clusterMarkers.forEach(marker => marker.remove());
+  clusterMarkers = [];
+});
+
+document.getElementById('back-from-step4').addEventListener('click', () => {
+  document.getElementById('step4-submit').classList.add('hidden');
+  document.getElementById('step3-tag-clusters').classList.remove('hidden');
+  
+  // Go back to last cluster
+  if (allClusters.length > 0) {
+    showCluster(allClusters.length - 1);
+  }
+});
+
+async function loadVoxelsAndTrees(center) {
+  
+  const buildingsInRadius = allBuildingsData.filter(b => {
+    try {
+      const c = turf.center(b);
+      const d = turf.distance([center.lng, center.lat], c.geometry.coordinates, { units: 'kilometers' });
+      return d <= RADIUS_KM;
+    } catch (e) { return false; }
+  });
+  
+  console.log(`Buildings in radius: ${buildingsInRadius.length}`);
+  
+  setTimeout(() => {
+    processVoxels(buildingsInRadius, center);
+    processTreesInRadius(center);
+  }, 100);
+}
+
+function processVoxels(buildings, center) {
+  const CUBE_SIZE = 5, centerLat = center.lat;
+  const metersPerDegreeLat = 111320;
+  const metersPerDegreeLon = 111320 * Math.cos(centerLat * Math.PI / 180);
+  const cubeSizeDegLat = CUBE_SIZE / metersPerDegreeLat;
+  const cubeSizeDegLon = CUBE_SIZE / metersPerDegreeLon;
+  const rotationRad = (MONTREAL_GRID_ROTATION * Math.PI) / 180;
+  
+  const allCubes = [];
+  
+  buildings.forEach(building => {
+    const height = building.properties?.height || 10;
+    const geometry = building.geometry;
+    if (!geometry) return;
+    
+    try {
+      let poly = geometry.type === 'Polygon' ? turf.polygon(geometry.coordinates) : turf.polygon(geometry.coordinates[0]);
+      
+      const bbox = turf.bbox(poly);
+      const [minLon, minLat, maxLon, maxLat] = bbox;
+      const centerLon = (minLon + maxLon) / 2, centerLat = (minLat + maxLat) / 2;
+      const numLayers = Math.ceil(height / CUBE_SIZE);
+      
+      for (let layer = 0; layer < numLayers; layer++) {
+        const baseHeight = layer * CUBE_SIZE;
+        const topHeight = Math.min((layer + 1) * CUBE_SIZE, height);
+        
+        let color = baseHeight < 25 ? '#90a4ae' : baseHeight < 50 ? '#78909c' : 
+                    baseHeight < 75 ? '#607d8b' : baseHeight < 100 ? '#546e7a' : '#455a64';
+        
+        for (let lat = minLat; lat <= maxLat; lat += cubeSizeDegLat) {
+          for (let lon = minLon; lon <= maxLon; lon += cubeSizeDegLon) {
+            const gap = 0.05, gapLat = cubeSizeDegLat * gap, gapLon = cubeSizeDegLon * gap;
+            
+            const localLon = lon - centerLon, localLat = lat - centerLat;
+            const rotatedLon = localLon * Math.cos(rotationRad) - localLat * Math.sin(rotationRad);
+            const rotatedLat = localLon * Math.sin(rotationRad) + localLat * Math.cos(rotationRad);
+            const finalLon = rotatedLon + centerLon, finalLat = rotatedLat + centerLat;
+            
+            const cubeSquare = turf.polygon([[
+              [finalLon + gapLon, finalLat + gapLat],
+              [finalLon + cubeSizeDegLon - gapLon, finalLat + gapLat],
+              [finalLon + cubeSizeDegLon - gapLon, finalLat + cubeSizeDegLat - gapLat],
+              [finalLon + gapLon, finalLat + cubeSizeDegLat - gapLat],
+              [finalLon + gapLon, finalLat + gapLat]
+            ]]);
+            
+            try {
+              if (turf.booleanIntersects(cubeSquare, poly)) {
+                allCubes.push({
+                  type: 'Feature',
+                  properties: { height: topHeight, base: baseHeight + 0.2, color: color, originalColor: color },
+                  geometry: cubeSquare.geometry
+                });
+              }
+            } catch (e) {}
+          }
+        }
+      }
+    } catch (e) {}
+  });
+  
+  console.log(`Generated ${allCubes.length} voxels`);
+  
+  allVoxelFeatures = allCubes;
+  voxelsLoaded = true;
+  buildSpatialIndex();
+  
+  if (map.getSource('voxel-cubes')) {
+    map.getSource('voxel-cubes').setData({ type: 'FeatureCollection', features: allCubes });
+  } else {
+    map.addSource('voxel-cubes', { type: 'geojson', data: { type: 'FeatureCollection', features: allCubes }});
+    map.addLayer({
+      id: 'voxel-fill',
+      type: 'fill-extrusion',
+      source: 'voxel-cubes',
+      paint: {
+        'fill-extrusion-color': ['get', 'color'],
+        'fill-extrusion-height': ['get', 'height'],
+        'fill-extrusion-base': ['get', 'base'],
+        'fill-extrusion-opacity': 0.9,
+        'fill-extrusion-vertical-gradient': true
+      }
+    });
+  }
+  
+  if (map.getLayer('building')) map.setLayoutProperty('building', 'visibility', 'none');
+}
+
+function buildSpatialIndex() {
+  voxelSpatialIndex = new Map();
+  const gridSize = 0.001;
+  
+  allVoxelFeatures.forEach((voxel, index) => {
+    try {
+      const center = turf.center(voxel);
+      const [lon, lat] = center.geometry.coordinates;
+      const gridX = Math.floor(lon / gridSize);
+      const gridY = Math.floor(lat / gridSize);
+      const key = `${gridX},${gridY}`;
+      
+      if (!voxelSpatialIndex.has(key)) {
+        voxelSpatialIndex.set(key, []);
+      }
+      voxelSpatialIndex.get(key).push(index);
+    } catch (e) {}
+  });
+  
+  console.log(`Spatial index: ${voxelSpatialIndex.size} cells`);
+}
+
+function processTreesInRadius(center) {
+  const treeCubes = [];
+  
+  allTreesData.forEach(tree => {
+    const lon = parseFloat(tree.Longitude), lat = parseFloat(tree.Latitude);
+    if (isNaN(lon) || isNaN(lat)) return;
+    
+    const d = turf.distance([center.lng, center.lat], [lon, lat], { units: 'kilometers' });
+    if (d > RADIUS_KM) return;
+    
+    const height = parseFloat(tree.Hauteur_totale) || 8;
+    const TREE_SIZE = 3;
+    const metersPerDegreeLat = 111320;
+    const metersPerDegreeLon = 111320 * Math.cos(lat * Math.PI / 180);
+    const treeSizeDegLat = TREE_SIZE / metersPerDegreeLat;
+    const treeSizeDegLon = TREE_SIZE / metersPerDegreeLon;
+    
+    treeCubes.push({
+      type: 'Feature',
+      properties: { height: height, base: 0, color: '#66bb6a' },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [[
+          [lon - treeSizeDegLon/2, lat - treeSizeDegLat/2],
+          [lon + treeSizeDegLon/2, lat - treeSizeDegLat/2],
+          [lon + treeSizeDegLon/2, lat + treeSizeDegLat/2],
+          [lon - treeSizeDegLon/2, lat + treeSizeDegLat/2],
+          [lon - treeSizeDegLon/2, lat - treeSizeDegLat/2]
+        ]]
+      }
+    });
+  });
+  
+  console.log(`Generated ${treeCubes.length} trees`);
+  
+  if (map.getSource('tree-cubes')) {
+    map.getSource('tree-cubes').setData({ type: 'FeatureCollection', features: treeCubes });
+  } else if (treeCubes.length > 0) {
+    map.addSource('tree-cubes', { type: 'geojson', data: { type: 'FeatureCollection', features: treeCubes }});
+    map.addLayer({
+      id: 'tree-cubes',
+      type: 'fill-extrusion',
+      source: 'tree-cubes',
+      paint: {
+        'fill-extrusion-color': ['get', 'color'],
+        'fill-extrusion-height': ['get', 'height'],
+        'fill-extrusion-base': ['get', 'base'],
+        'fill-extrusion-opacity': 0.8,
+        'fill-extrusion-vertical-gradient': true
+      }
+    });
+  }
+}
+
+// Paint color selection
+document.getElementById('paint-red').addEventListener('click', () => {
+  currentPaintColor = 'disliked';
+  document.getElementById('paint-red').classList.add('active');
+  document.getElementById('paint-green').classList.remove('active');
+  
+  // Update preview color if tool is active
+  if (currentTool === 'paint' && map.getSource('tool-preview')) {
+    // Force preview update
+    map.getCanvas().dispatchEvent(new MouseEvent('mousemove'));
+  }
+});
+
+document.getElementById('paint-green').addEventListener('click', () => {
+  currentPaintColor = 'liked';
+  document.getElementById('paint-green').classList.add('active');
+  document.getElementById('paint-red').classList.remove('active');
+  
+  // Update preview color if tool is active
+  if (currentTool === 'paint' && map.getSource('tool-preview')) {
+    // Force preview update
+    map.getCanvas().dispatchEvent(new MouseEvent('mousemove'));
+  }
+});
+
+// Tool selection
+document.getElementById('tool-cursor').addEventListener('click', () => {
+  currentTool = 'cursor';
+  document.getElementById('tool-cursor').classList.add('active');
+  document.getElementById('tool-paint').classList.remove('active');
+  document.getElementById('tool-erase').classList.remove('active');
+  map.getCanvas().style.cursor = '';
+  map.dragPan.enable();
+  map.scrollZoom.enable();
+  map.doubleClickZoom.enable();
+  removeToolPreview();
+});
+
+document.getElementById('tool-paint').addEventListener('click', () => {
+  currentTool = 'paint';
+  document.getElementById('tool-paint').classList.add('active');
+  document.getElementById('tool-cursor').classList.remove('active');
+  document.getElementById('tool-erase').classList.remove('active');
+  map.getCanvas().style.cursor = 'crosshair';
+  map.dragPan.disable();
+  map.scrollZoom.enable(); // KEEP ZOOM ENABLED
+  map.doubleClickZoom.enable(); // KEEP DOUBLE-CLICK ZOOM
+  createToolPreview();
+});
+
+document.getElementById('tool-erase').addEventListener('click', () => {
+  currentTool = 'erase';
+  document.getElementById('tool-erase').classList.add('active');
+  document.getElementById('tool-cursor').classList.remove('active');
+  document.getElementById('tool-paint').classList.remove('active');
+  map.getCanvas().style.cursor = 'crosshair';
+  map.dragPan.disable();
+  map.scrollZoom.enable(); // KEEP ZOOM ENABLED
+  map.doubleClickZoom.enable(); // KEEP DOUBLE-CLICK ZOOM
+  createToolPreview();
+});
+
+// Tool size
+document.getElementById('tool-size-slider').addEventListener('input', (e) => {
+  toolSize = parseInt(e.target.value);
+  document.getElementById('tool-size-value').textContent = toolSize;
+});
+
+// Paint targets
+document.getElementById('paint-buildings').addEventListener('change', (e) => {
+  paintBuildings = e.target.checked;
+});
+
+document.getElementById('paint-ground').addEventListener('change', (e) => {
+  paintGround = e.target.checked;
+});
+
+function createToolPreview() {
+  if (!map.getSource('tool-preview')) {
+    map.addSource('tool-preview', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] }
+    });
+    
+    map.addLayer({
+      id: 'tool-preview-fill',
+      type: 'fill',
+      source: 'tool-preview',
+      paint: { 'fill-color': '#ff0000', 'fill-opacity': 0.15 }
+    });
+    
+    map.addLayer({
+      id: 'tool-preview-line',
+      type: 'line',
+      source: 'tool-preview',
+      paint: { 'line-color': '#ff0000', 'line-width': 2, 'line-dasharray': [3, 3] }
+    });
+  }
+}
+
+function removeToolPreview() {
+  if (map.getLayer('tool-preview-fill')) {
+    map.removeLayer('tool-preview-fill');
+    map.removeLayer('tool-preview-line');
+    map.removeSource('tool-preview');
+  }
+}
+
+
+// Paint buildings with colored overlay instead of modifying voxels
+function paintBuildingsWithOverlay(clickPoint, radiusMeters, color, type) {
+  const radiusKm = radiusMeters / 1000;
+  const gridSize = 0.001;
+  const radiusDeg = radiusMeters / 111320;
+  const [clickLon, clickLat] = clickPoint;
+  
+  const gridRadius = Math.ceil(radiusDeg / gridSize);
+  const centerGridX = Math.floor(clickLon / gridSize);
+  const centerGridY = Math.floor(clickLat / gridSize);
+  
+  for (let dx = -gridRadius; dx <= gridRadius; dx++) {
+    for (let dy = -gridRadius; dy <= gridRadius; dy++) {
+      const key = `${centerGridX + dx},${centerGridY + dy}`;
+      const indices = voxelSpatialIndex.get(key);
+      
+      if (indices) {
+        indices.forEach(index => {
+          const voxel = allVoxelFeatures[index];
+          try {
+            if (!voxel._center) {
+              const center = turf.center(voxel);
+              voxel._center = center.geometry.coordinates;
+            }
+            
+            const dx = clickPoint[0] - voxel._center[0];
+            const dy = clickPoint[1] - voxel._center[1];
+            const distSquared = dx * dx + dy * dy;
+            const radiusDegSquared = radiusDeg * radiusDeg;
+            
+            if (distSquared < radiusDegSquared) {
+              // Create an overlay for this voxel
+              createVoxelOverlay(voxel, color, type, index);
+            }
+          } catch (e) {}
+        });
+      }
+    }
+  }
+}
+
+// Create a colored overlay on a voxel surface
+function createVoxelOverlay(voxel, color, type, voxelIndex) {
+  const overlayId = `voxel-overlay-${overlayIdCounter++}`;
+  
+  // Get voxel geometry and height
+  const baseHeight = voxel.properties.base || 0;
+  const topHeight = voxel.properties.height || 10;
+  
+  // Paint full height of voxel
+  let displayBase = baseHeight;
+  let displayHeight = topHeight;
+  
+  // Only create overlay if there's visible height
+  if (displayHeight <= displayBase) return;
+  
+  // CRITICAL: Mark the actual voxel as tagged in allVoxelFeatures
+  voxel.properties.tagged = true;
+  voxel.properties.tagType = type;
+  voxel.properties.color = color;
+  
+  // Create overlay feature with modified geometry
+  const overlayFeature = {
+    type: 'Feature',
+    geometry: voxel.geometry,
+    properties: {
+      color: color,
+      type: type,
+      base: displayBase,
+      height: displayHeight,
+      voxelIndex: voxelIndex,
+      overlayId: overlayId
+    }
+  };
+  
+  // Add to map
+  if (!map.getSource(overlayId)) {
+    map.addSource(overlayId, {
+      type: 'geojson',
+      data: overlayFeature
+    });
+    
+    map.addLayer({
+      id: overlayId,
+      type: 'fill-extrusion',
+      source: overlayId,
+      paint: {
+        'fill-extrusion-color': color,
+        'fill-extrusion-height': displayHeight,
+        'fill-extrusion-base': displayBase,
+        'fill-extrusion-opacity': 0.95
+      }
+    });
+    
+    // Force immediate high-quality render
+    map.triggerRepaint();
+    
+    paintedOverlays.push(overlayId);
+    
+    // Track in appropriate set
+    if (type === 'disliked') {
+      dislikedVoxels.add(voxelIndex);
+    } else {
+      likedVoxels.add(voxelIndex);
+    }
+  }
+}
+
+
+function performAction(clickPoint, pixelPoint) {
+  if (currentTool === 'erase') {
+    eraseAtPoint(clickPoint, toolSize);
+  } else if (currentTool === 'paint') {
+    const currentColor = currentPaintColor === 'disliked' ? '#ff0000' : '#00ff00';
+    
+    if (paintGround) {
+      paintGroundCircle(clickPoint, toolSize, currentColor, currentPaintColor);
+    }
+    
+    if (paintBuildings && voxelSpatialIndex) {
+      paintBuildingsWithOverlay(clickPoint, toolSize, currentColor, currentPaintColor);
+    }
+  }
+}
+
+// OPTIMIZED: Update only specific voxels that were painted
+function updatePaintedVoxels(indices) {
+  if (!map.getSource('voxel-cubes')) return;
+  
+  const source = map.getSource('voxel-cubes');
+  const currentData = source._data;
+  
+  if (currentData && currentData.features) {
+    indices.forEach(idx => {
+      if (currentData.features[idx] && allVoxelFeatures[idx]) {
+        currentData.features[idx].properties.color = allVoxelFeatures[idx].properties.color;
+        currentData.features[idx].properties.tagged = allVoxelFeatures[idx].properties.tagged;
+        currentData.features[idx].properties.tagType = allVoxelFeatures[idx].properties.tagType;
+      }
+    });
+    
+    // Much faster update - only changes painted voxels
+    source.setData(currentData);
+  }
+}
+
+function fastSprayPaint(clickPoint, radiusMeters, color, type, pixelPoint) {
+  const gridSize = 0.001;
+  const radiusDeg = radiusMeters / 111320;
+  const [clickLon, clickLat] = clickPoint;
+  
+  // Use selected paint height from dropdown
+  let targetHeight = selectedPaintHeight;
+  
+  const gridRadius = Math.ceil(radiusDeg / gridSize);
+  const centerGridX = Math.floor(clickLon / gridSize);
+  const centerGridY = Math.floor(clickLat / gridSize);
+  
+  const paintedIndices = []; // Return indices instead of count
+  const targetSet = type === 'disliked' ? dislikedVoxels : likedVoxels;
+  const radiusDegSquared = radiusDeg * radiusDeg;
+  
+  for (let dx = -gridRadius; dx <= gridRadius; dx++) {
+    for (let dy = -gridRadius; dy <= gridRadius; dy++) {
+      const key = `${centerGridX + dx},${centerGridY + dy}`;
+      const indices = voxelSpatialIndex.get(key);
+      
+      if (indices) {
+        indices.forEach(index => {
+          const voxel = allVoxelFeatures[index];
+          try {
+            if (!voxel._center) {
+              const center = turf.center(voxel);
+              voxel._center = center.geometry.coordinates;
+            }
+            
+            // FIX 3: 3D distance check to prevent stacking bug
+            const clickHeight = clickPoint[2] || 0;
+            const voxelHeight = voxel._center[2] || 0;
+            
+            // Horizontal distance in degrees
+            const dx = clickPoint[0] - voxel._center[0];
+            const dy = clickPoint[1] - voxel._center[1];
+            const distSquared2D = dx * dx + dy * dy;
+            
+            // CRITICAL: Also check vertical distance (height)
+            // Voxels are ~5-10m tall, so if height difference > toolSize, don't paint
+            const heightDiff = Math.abs(clickHeight - voxelHeight);
+            
+            // Only paint if within horizontal range AND height difference is small
+            if (distSquared2D < radiusDegSquared && heightDiff < 15) {
+              voxel.properties.color = color;
+              voxel.properties.tagged = true;
+              voxel.properties.tagType = type;
+              targetSet.add(index);
+              paintedIndices.push(index); // Collect painted indices
+            }
+          } catch (e) {}
+        });
+      }
+    }
+  }
+  
+  return paintedIndices;
+}
+
+function paintGroundCircle(center, radiusMeters, color, type) {
+  const radiusKm = radiusMeters / 1000;
+  const circle = turf.circle(center, radiusKm, { steps: 16, units: 'kilometers' }); // Reduced steps from 32 to 16
+  
+  const paintId = `ground-paint-${groundPaintMarkers.length}`;
+  circle.properties = { color: color, type: type };
+  
+  map.addSource(paintId, {
+    type: 'geojson',
+    data: circle
+  });
+  
+  map.addLayer({
+    id: paintId,
+    type: 'fill',
+    source: paintId,
+    paint: {
+      'fill-color': color,
+      'fill-opacity': 0.4
+    }
+  }, 'voxel-fill');
+  
+  // Force immediate high-quality render
+  map.triggerRepaint();
+  
+  groundPaintMarkers.push(paintId);
+  
+  // Limit total ground markers to prevent performance issues
+  if (groundPaintMarkers.length > 500) {
+    const oldestId = groundPaintMarkers.shift();
+    if (map.getLayer(oldestId)) {
+      map.removeLayer(oldestId);
+      map.removeSource(oldestId);
+    }
+  }
+}
+
+function eraseAtPoint(clickPoint, radiusMeters) {
+  console.log('Erasing at point:', clickPoint, 'radius:', radiusMeters);
+  const radiusKm = radiusMeters / 1000;
+  
+  if (paintGround) {
+    groundPaintMarkers = groundPaintMarkers.filter(paintId => {
+      try {
+        const source = map.getSource(paintId);
+        if (source && source._data && source._data.geometry) {
+          const eraseCircle = turf.circle(clickPoint, radiusKm, { units: 'kilometers' });
+          const overlaps = turf.booleanOverlap(source._data, eraseCircle) || 
+                         turf.booleanContains(eraseCircle, source._data) ||
+                         turf.booleanWithin(source._data, eraseCircle);
+          
+          if (overlaps) {
+            if (map.getLayer(paintId)) {
+              map.removeLayer(paintId);
+              map.removeSource(paintId);
+            }
+            return false;
+          }
+        }
+      } catch (e) {}
+      return true;
+    });
+  }
+  
+  console.log('paintBuildings:', paintBuildings, 'voxelSpatialIndex:', !!voxelSpatialIndex);
+  
+  if (paintBuildings && voxelSpatialIndex) {
+    const gridSize = 0.001;
+    const radiusDeg = radiusMeters / 111320;
+    const [clickLon, clickLat] = clickPoint;
+    
+    const gridRadius = Math.ceil(radiusDeg / gridSize);
+    const centerGridX = Math.floor(clickLon / gridSize);
+    const centerGridY = Math.floor(clickLat / gridSize);
+    
+    let erasedCount = 0;
+    let checkedCount = 0;
+    let taggedCount = 0;
+    
+    console.log('Checking voxels for erasing, gridRadius:', gridRadius, 'radiusMeters:', radiusMeters);
+    
+    for (let dx = -gridRadius; dx <= gridRadius; dx++) {
+      for (let dy = -gridRadius; dy <= gridRadius; dy++) {
+        const key = `${centerGridX + dx},${centerGridY + dy}`;
+        const indices = voxelSpatialIndex.get(key);
+        
+        if (indices) {
+          indices.forEach(index => {
+            const voxel = allVoxelFeatures[index];
+            checkedCount++;
+            
+            if (voxel.properties.tagged) {
+              taggedCount++;
+              try {
+                const center = turf.center(voxel);
+                const centerCoords = center.geometry.coordinates;
+                
+                // Use turf.distance for accurate 2D distance
+                const distMeters = turf.distance(
+                  [clickPoint[0], clickPoint[1]], 
+                  [centerCoords[0], centerCoords[1]], 
+                  { units: 'meters' }
+                );
+                
+                console.log(`Voxel ${index}: tagged=${voxel.properties.tagged}, dist=${distMeters.toFixed(1)}m, color=${voxel.properties.color}`);
+                
+                if (distMeters < radiusMeters) {
+                  console.log('✓ Erasing voxel', index, 'at distance', distMeters.toFixed(1), 'm');
+                  
+                  // Remove any overlay layers for this voxel
+                  paintedOverlays.forEach(overlayId => {
+                    try {
+                      const source = map.getSource(overlayId);
+                      if (source && source._data && source._data.properties.voxelIndex === index) {
+                        if (map.getLayer(overlayId)) {
+                          map.removeLayer(overlayId);
+                        }
+                        if (map.getSource(overlayId)) {
+                          map.removeSource(overlayId);
+                        }
+                      }
+                    } catch (e) {}
+                  });
+                  
+                  // Restore original heights when erasing
+                  const original = voxelOriginalHeights.get(index);
+                  if (original) {
+                    voxel.properties.base = original.base;
+                    voxel.properties.height = original.height;
+                  }
+                  
+                  voxel.properties.color = voxel.properties.originalColor;
+                  delete voxel.properties.tagged;
+                  delete voxel.properties.tagType;
+                  dislikedVoxels.delete(index);
+                  likedVoxels.delete(index);
+                  erasedCount++;
+                }
+              } catch (e) {
+                console.error('Error checking voxel for erase:', e);
+              }
+            }
+          });
+        }
+      }
+    }
+    
+    console.log(`Checked ${checkedCount} voxels, ${taggedCount} were tagged, erased ${erasedCount}`);
+    
+    if (erasedCount > 0) {
+      batchUpdateVoxels();
+    }
+  }
+}
+
+function updateVoxelColors() {
+  // OPTIMIZED: Update colors directly in the existing data without reloading
+  // This prevents voxels from disappearing and is much faster
+  if (map.getSource('voxel-cubes')) {
+    const source = map.getSource('voxel-cubes');
+    const currentData = source._data;
+    
+    // Update colors in place
+    if (currentData && currentData.features) {
+      currentData.features.forEach((feature, idx) => {
+        if (allVoxelFeatures[idx]) {
+          feature.properties.color = allVoxelFeatures[idx].properties.color;
+          feature.properties.tagged = allVoxelFeatures[idx].properties.tagged;
+          feature.properties.tagType = allVoxelFeatures[idx].properties.tagType;
+        }
+      });
+    }
+    
+    // Trigger re-render without full data reload
+    source.setData(currentData);
+  }
+}
+
+// Clear all paint
+document.getElementById('clear-all-paint-btn').addEventListener('click', () => {
+  const lang = (typeof currentLang !== 'undefined') ? currentLang : 'fr';
+  const title = lang === 'fr' ? 'Confirmation' : 'Confirmation';
+  const message = lang === 'fr' ? 'Effacer toutes les zones peintes ?' : 'Clear all paint?';
+  
+  showCustomConfirm(title, message, (confirmed) => {
+    if (confirmed) {
+      dislikedVoxels.clear();
+      likedVoxels.clear();
+      
+      allVoxelFeatures.forEach(voxel => {
+        if (voxel.properties.tagged) {
+          voxel.properties.color = voxel.properties.originalColor;
+          delete voxel.properties.tagged;
+          delete voxel.properties.tagType;
+        }
+      });
+      
+      batchUpdateVoxels();
+      
+      groundPaintMarkers.forEach(paintId => {
+        if (map.getLayer(paintId)) {
+          map.removeLayer(paintId);
+          map.removeSource(paintId);
+        }
+      });
+      groundPaintMarkers = [];
+      
+      // Remove overlays
+      paintedOverlays.forEach(overlayId => {
+        try {
+          if (map.getLayer(overlayId)) map.removeLayer(overlayId);
+          if (map.getSource(overlayId)) map.removeSource(overlayId);
+        } catch(e) {}
+      });
+      paintedOverlays = [];
+    }
+  });
+});
+
+// Next to cluster tagging
+document.getElementById('next-to-tag-clusters-btn').addEventListener('click', () => {
+  document.getElementById('step2-paint').classList.add('hidden');
+  document.getElementById('step3-tag-clusters').classList.remove('hidden');
+  
+  // Reset tool to cursor
+  if (currentTool !== 'cursor') {
+    document.getElementById('tool-cursor').click();
+  }
+  
+  detectAndDisplayClusters();
+});
+
+// Improved cluster detection with edge-to-edge distance for ground circles
+function detectAndDisplayClusters() {
+  const CLUSTER_DISTANCE_KM = 0.020; // 20m edge-to-edge distance for merging clusters
+  
+  console.log('Starting cluster detection...');
+  
+  const dislikedPoints = [];
+  dislikedVoxels.forEach(idx => {
+    const voxel = allVoxelFeatures[idx];
+    if (!voxel._center) {
+      voxel._center = turf.center(voxel).geometry.coordinates;
+    }
+    dislikedPoints.push({ coords: voxel._center, type: 'disliked', idx, isVoxel: true });
+  });
+  
+  // FIX 1: Add ground polygons to clustering
+  groundPaintMarkers.forEach(paintId => {
+    const source = map.getSource(paintId);
+    if (!source) return;
+    const data = source._data;
+    if (data.properties.type === 'disliked') {
+      const center = turf.center(data).geometry.coordinates;
+      const area = turf.area(data);
+      const radius = Math.sqrt(area / Math.PI) / 1000; // radius in km
+      dislikedPoints.push({ 
+        coords: center, 
+        type: 'disliked', 
+        idx: paintId, 
+        isVoxel: false,
+        area: area,
+        radius: radius,
+        geometry: data.geometry
+      });
+    }
+  });
+  
+  const likedPoints = [];
+  likedVoxels.forEach(idx => {
+    const voxel = allVoxelFeatures[idx];
+    if (!voxel._center) {
+      voxel._center = turf.center(voxel).geometry.coordinates;
+    }
+    likedPoints.push({ coords: voxel._center, type: 'liked', idx, isVoxel: true });
+  });
+  
+  // FIX 1: Add ground polygons to clustering
+  groundPaintMarkers.forEach(paintId => {
+    const source = map.getSource(paintId);
+    if (!source) return;
+    const data = source._data;
+    if (data.properties.type === 'liked') {
+      const center = turf.center(data).geometry.coordinates;
+      const area = turf.area(data);
+      const radius = Math.sqrt(area / Math.PI) / 1000; // radius in km
+      likedPoints.push({ 
+        coords: center, 
+        type: 'liked', 
+        idx: paintId, 
+        isVoxel: false,
+        area: area,
+        radius: radius,
+        geometry: data.geometry
+      });
+    }
+  });
+  
+  console.log(`Clustering ${dislikedPoints.length} disliked and ${likedPoints.length} liked points`);
+  
+  const dislikedClusters = clusterPointsDBSCAN(dislikedPoints, CLUSTER_DISTANCE_KM);
+  const likedClusters = clusterPointsDBSCAN(likedPoints, CLUSTER_DISTANCE_KM);
+  
+  console.log(`Found ${dislikedClusters.length} disliked clusters and ${likedClusters.length} liked clusters`);
+  
+  // Build allClusters array
+  allClusters = [];
+  
+  dislikedClusters.forEach((cluster, idx) => {
+    const coords = cluster.map(p => p.coords);
+    const avgLon = coords.reduce((sum, c) => sum + c[0], 0) / coords.length;
+    const avgLat = coords.reduce((sum, c) => sum + c[1], 0) / coords.length;
+    
+    allClusters.push({
+      id: `disliked-${idx}`,
+      type: 'disliked',
+      label: `Disliked Area ${idx + 1}`,
+      size: cluster.length,
+      centroid: [avgLon, avgLat],
+      points: cluster
+    });
+  });
+  
+  likedClusters.forEach((cluster, idx) => {
+    const coords = cluster.map(p => p.coords);
+    const avgLon = coords.reduce((sum, c) => sum + c[0], 0) / coords.length;
+    const avgLat = coords.reduce((sum, c) => sum + c[1], 0) / coords.length;
+    
+    allClusters.push({
+      id: `liked-${idx}`,
+      type: 'liked',
+      label: `Liked Area ${idx + 1}`,
+      size: cluster.length,
+      centroid: [avgLon, avgLat],
+      points: cluster
+    });
+  });
+  
+  if (allClusters.length === 0) {
+    const title = currentLang === 'fr' ? 'Avis' : 'Notice';
+    const message = currentLang === 'fr' ? 'Aucune zone peinte trouvée.' : 'No painted areas found.';
+    showCustomAlert(title, message);
+    document.getElementById('step3-tag-clusters').classList.add('hidden');
+    document.getElementById('step2-paint').classList.remove('hidden');
+    return;
+  }
+  
+  // Initialize navigation handlers
+  initStep3Navigation();
+  
+  // Start with first cluster
+  currentClusterIndex = 0;
+  showCluster(0);
+}
+
+// Optimized DBSCAN-like clustering with spatial indexing
+function clusterPointsDBSCAN(points, maxDistance) {
+  if (points.length === 0) return [];
+  
+  // Build spatial index for fast neighbor lookup
+  const spatialGrid = new Map();
+  const gridSize = maxDistance; // Grid cell size = cluster distance
+  
+  points.forEach((point, idx) => {
+    const [lon, lat] = point.coords;
+    const gridX = Math.floor(lon / gridSize);
+    const gridY = Math.floor(lat / gridSize);
+    const key = `${gridX},${gridY}`;
+    
+    if (!spatialGrid.has(key)) {
+      spatialGrid.set(key, []);
+    }
+    spatialGrid.get(key).push({ ...point, originalIdx: idx });
+  });
+  
+  // DBSCAN clustering
+  const clusters = [];
+  const visited = new Set();
+  const clustered = new Set();
+  
+  function getNeighbors(pointIdx) {
+    const point = points[pointIdx];
+    const [lon, lat] = point.coords;
+    const gridX = Math.floor(lon / gridSize);
+    const gridY = Math.floor(lat / gridSize);
+    
+    const neighbors = [];
+    
+    // Check surrounding cells (3x3 grid)
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const key = `${gridX + dx},${gridY + dy}`;
+        const cellPoints = spatialGrid.get(key);
+        
+        if (cellPoints) {
+          cellPoints.forEach(cellPoint => {
+            const centerDist = turf.distance(point.coords, cellPoint.coords, { units: 'kilometers' });
+            
+            // Calculate edge-to-edge distance for ground paint circles
+            let effectiveDistance = centerDist;
+            
+            // If both points are ground paint circles, subtract their radii
+            if (point.isVoxel === false && point.radius && cellPoint.radius) {
+              effectiveDistance = Math.max(0, centerDist - point.radius - cellPoint.radius);
+            }
+            // If one is a ground circle, subtract its radius
+            else if (point.isVoxel === false && point.radius) {
+              effectiveDistance = Math.max(0, centerDist - point.radius);
+            }
+            else if (cellPoint.radius && cellPoint.isVoxel === false) {
+              effectiveDistance = Math.max(0, centerDist - cellPoint.radius);
+            }
+            
+            if (effectiveDistance <= maxDistance && cellPoint.originalIdx !== pointIdx) {
+              neighbors.push(cellPoint.originalIdx);
+            }
+          });
+        }
+      }
+    }
+    
+    return neighbors;
+  }
+  
+  function expandCluster(startIdx, neighbors, cluster) {
+    cluster.push(points[startIdx]);
+    clustered.add(startIdx);
+    
+    const queue = [...neighbors];
+    const inQueue = new Set(neighbors);
+    
+    while (queue.length > 0) {
+      const currentIdx = queue.shift();
+      
+      if (visited.has(currentIdx)) continue;
+      visited.add(currentIdx);
+      
+      if (!clustered.has(currentIdx)) {
+        cluster.push(points[currentIdx]);
+        clustered.add(currentIdx);
+      }
+      
+      const currentNeighbors = getNeighbors(currentIdx);
+      
+      currentNeighbors.forEach(neighborIdx => {
+        if (!inQueue.has(neighborIdx) && !clustered.has(neighborIdx)) {
+          queue.push(neighborIdx);
+          inQueue.add(neighborIdx);
+        }
+      });
+    }
+  }
+  
+  // Process all points
+  for (let i = 0; i < points.length; i++) {
+    if (clustered.has(i)) continue;
+    
+    visited.add(i);
+    const neighbors = getNeighbors(i);
+    
+    // Start new cluster
+    const cluster = [];
+    expandCluster(i, neighbors, cluster);
+    
+    if (cluster.length > 0) {
+      clusters.push(cluster);
+    }
+  }
+  
+  return clusters;
+}
+
+function showCluster(index) {
+  const cluster = allClusters[index];
+  
+  document.getElementById('cluster-number').textContent = index + 1;
+  document.getElementById('cluster-total').textContent = allClusters.length;
+  
+  const badge = document.getElementById('cluster-type-badge');
+  const badgeText = cluster.type === 'disliked' 
+    ? (currentLang === 'fr' ? 'Zone négative' : 'Disliked Area')
+    : (currentLang === 'fr' ? 'Zone positive' : 'Liked Area');
+  badge.textContent = badgeText;
+  badge.className = `cluster-type-badge ${cluster.type}`;
+  
+  document.getElementById('cluster-size').textContent = `${cluster.size} voxels`;
+  
+  // Calculate ground area from the cluster's ground paint points
+  let groundArea = 0;
+  let voxelCount = 0;
+  const groundGeometries = [];
+  
+  if (cluster.points && cluster.points.length > 0) {
+    cluster.points.forEach(point => {
+      if (point.isVoxel === false && point.geometry) {
+        // Collect geometries for union
+        groundGeometries.push(point.geometry);
+      } else if (point.isVoxel === true) {
+        voxelCount++;
+      }
+    });
+  }
+  
+  // Calculate union to get actual overlaid area
+  if (groundGeometries.length > 0) {
+    console.log(`=== AREA CALCULATION for cluster ${cluster.id} ===`);
+    console.log(`Ground geometries count: ${groundGeometries.length}`);
+    
+    try {
+      if (groundGeometries.length === 1) {
+        // Single geometry
+        groundArea = turf.area(groundGeometries[0]);
+        console.log(`Single geometry area: ${Math.round(groundArea)} m²`);
+      } else {
+        // Properly union overlapping circles
+        console.log('Starting union of overlapping circles...');
+        
+        let union = turf.feature(groundGeometries[0]);
+        let successfulUnions = 1;
+        
+        for (let i = 1; i < groundGeometries.length; i++) {
+          try {
+            const nextFeature = turf.feature(groundGeometries[i]);
+            const result = turf.union(union, nextFeature);
+            
+            if (result && result.geometry) {
+              union = result;
+              successfulUnions++;
+            } else {
+              console.warn(`Union ${i} returned null, skipping`);
+            }
+          } catch (unionError) {
+            console.warn(`Union failed at geometry ${i}:`, unionError);
+          }
+        }
+        
+        if (union && union.geometry) {
+          groundArea = turf.area(union.geometry);
+          console.log(`Successfully unioned ${successfulUnions}/${groundGeometries.length} geometries`);
+          console.log(`Final union area: ${Math.round(groundArea)} m²`);
+          
+          // Update cluster centroid to be center of the union
+          const unionCentroid = turf.centroid(union);
+          cluster.centroid = unionCentroid.geometry.coordinates;
+        } else {
+          // Fallback: use first circle only
+          groundArea = turf.area(groundGeometries[0]);
+          console.log(`Union failed, using first geometry: ${Math.round(groundArea)} m²`);
+        }
+      }
+    } catch (error) {
+      console.error('Error calculating ground area:', error);
+      // Fallback to first geometry
+      if (groundGeometries.length > 0) {
+        groundArea = turf.area(groundGeometries[0]);
+        console.log(`Error fallback area: ${Math.round(groundArea)} m²`);
+      }
+    }
+    console.log(`=== END AREA CALCULATION ===`);
+  }
+  
+  // Update display with ground area if available
+  const sizeText = currentLang === 'fr' 
+    ? `${voxelCount} voxels${groundArea > 0 ? ` • ${Math.round(groundArea)} m²` : ''}` 
+    : `${voxelCount} voxels${groundArea > 0 ? ` • ${Math.round(groundArea)} m²` : ''}`;
+  document.getElementById('cluster-size').textContent = sizeText;
+  
+  renderTagCategories(cluster);
+  showClusterMarker(cluster.centroid, cluster.type);
+  
+  document.getElementById('prev-cluster-btn').disabled = (index === 0);
+  const nextBtn = document.getElementById('next-cluster-btn');
+  const nextText = currentLang === 'fr' ? 'Suivant →' : 'Next →';
+  const finishText = currentLang === 'fr' ? 'Terminer →' : 'Finish →';
+  nextBtn.innerHTML = `<span data-en="${index === allClusters.length - 1 ? 'Finish →' : 'Next →'}" data-fr="${index === allClusters.length - 1 ? 'Terminer →' : 'Suivant →'}">${index === allClusters.length - 1 ? finishText : nextText}</span>`;
+}
+
+function renderTagCategories(cluster) {
+  const container = document.getElementById('tag-categories-container');
+  container.innerHTML = '';
+  
+  const savedData = clusterLabels[cluster.id] || { tags: [], comment: '', openCategory: null };
+  
+  // Show only positive for liked clusters, only negative for disliked
+  const showPositive = (cluster.type === 'liked');
+  
+  // Use the correct language version
+  const tagOptions = currentLang === 'fr' ? TAG_OPTIONS_FR : TAG_OPTIONS;
+  
+  Object.entries(tagOptions).forEach(([category, options], index) => {
+    const categoryDiv = document.createElement('div');
+    const isOpen = (savedData.openCategory === category);
+    categoryDiv.className = isOpen ? 'tag-category' : 'tag-category collapsed';
+    categoryDiv.dataset.category = category;
+    
+    let html = `
+      <div class="tag-category-header">
+        <div class="tag-category-title">
+          <span>${category}</span>
+        </div>
+        <span class="tag-category-arrow">▼</span>
+      </div>
+      <div class="tag-options-group">
+    `;
+    
+    // Show only relevant options based on cluster type
+    const relevantOptions = showPositive ? options.positive : options.negative;
+    const optionClass = showPositive ? 'positive' : 'negative';
+    
+    relevantOptions.forEach(option => {
+      const isSelected = savedData.tags.includes(option);
+      
+      // Check if this is a seasonal tag and extract season
+      let displayText = option;
+      let seasonBadge = '';
+      const seasonMatch = option.match(/^(WINTER|SPRING|SUMMER|FALL|HIVER|PRINTEMPS|ÉTÉ|AUTOMNE)\s+(.+)$/i);
+      
+      if (seasonMatch) {
+        const season = seasonMatch[1].toUpperCase();
+        displayText = seasonMatch[2];
+        
+        // Map season to badge class and reorder: Spring, Summer, Fall, Winter
+        const seasonMap = {
+          'SPRING': { class: 'spring', text: 'SPRING' },
+          'PRINTEMPS': { class: 'spring', text: 'PRINTEMPS' },
+          'SUMMER': { class: 'summer', text: 'SUMMER' },
+          'ÉTÉ': { class: 'summer', text: 'ÉTÉ' },
+          'FALL': { class: 'fall', text: 'FALL' },
+          'AUTOMNE': { class: 'fall', text: 'AUTOMNE' },
+          'WINTER': { class: 'winter', text: 'WINTER' },
+          'HIVER': { class: 'winter', text: 'HIVER' }
+        };
+        
+        const seasonInfo = seasonMap[season];
+        if (seasonInfo) {
+          seasonBadge = `<span class="season-badge ${seasonInfo.class}">${seasonInfo.text}</span>`;
+        }
+      }
+      
+      html += `
+        <div class="tag-option-item ${optionClass} ${isSelected ? 'selected' : ''}" data-tag="${option}">
+          <input type="checkbox" class="tag-option-checkbox" ${isSelected ? 'checked' : ''} />
+          <span class="tag-option-label">${seasonBadge}${displayText}</span>
+        </div>
+      `;
+    });
+    
+    html += '</div>';
+    categoryDiv.innerHTML = html;
+    container.appendChild(categoryDiv);
+    
+    // Add click handler for header to toggle
+    const header = categoryDiv.querySelector('.tag-category-header');
+    header.addEventListener('click', () => {
+      // Close all other categories
+      container.querySelectorAll('.tag-category').forEach(cat => {
+        if (cat !== categoryDiv) {
+          cat.classList.add('collapsed');
+        }
+      });
+      
+      // Toggle this one
+      const wasCollapsed = categoryDiv.classList.contains('collapsed');
+      categoryDiv.classList.toggle('collapsed');
+      
+      // Save open category
+      if (!categoryDiv.classList.contains('collapsed')) {
+        savedData.openCategory = category;
+        clusterLabels[cluster.id] = savedData;
+      }
+    });
+  });
+  
+  // Auto-save on change
+  container.querySelectorAll('.tag-option-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      const checkbox = item.querySelector('input[type="checkbox"]');
+      if (e.target !== checkbox) {
+        checkbox.checked = !checkbox.checked;
+      }
+      item.classList.toggle('selected', checkbox.checked);
+      autoSaveCurrentCluster();
+    });
+  });
+  
+  document.getElementById('current-cluster-comment').value = savedData.comment || '';
+  
+  // Auto-save comment (remove old listener first to avoid duplicates)
+  const commentBox = document.getElementById('current-cluster-comment');
+  const commentHandler = () => autoSaveCurrentCluster();
+  commentBox.removeEventListener('input', commentHandler);
+  commentBox.addEventListener('input', commentHandler);
+}
+
+function autoSaveCurrentCluster() {
+  const cluster = allClusters[currentClusterIndex];
+  
+  const selectedTags = [];
+  document.querySelectorAll('.tag-option-item input:checked').forEach(checkbox => {
+    const item = checkbox.closest('.tag-option-item');
+    selectedTags.push(item.dataset.tag);
+  });
+  
+  const comment = document.getElementById('current-cluster-comment').value.trim();
+  
+  // Find which category is open
+  let openCategory = null;
+  document.querySelectorAll('.tag-category').forEach(cat => {
+    if (!cat.classList.contains('collapsed')) {
+      openCategory = cat.dataset.category;
+    }
+  });
+  
+  clusterLabels[cluster.id] = {
+    tags: selectedTags,
+    comment: comment,
+    openCategory: openCategory
+  };
+}
+
+// Initialize Step 3 navigation (call once when Step 3 is first shown)
+let step3NavigationInitialized = false;
+
+function initStep3Navigation() {
+  if (step3NavigationInitialized) return;
+  
+  document.getElementById('prev-cluster-btn').addEventListener('click', () => {
+    currentClusterIndex--;
+    showCluster(currentClusterIndex);
+  });
+
+  document.getElementById('next-cluster-btn').addEventListener('click', () => {
+    if (currentClusterIndex < allClusters.length - 1) {
+      currentClusterIndex++;
+      showCluster(currentClusterIndex);
+    } else {
+      clusterMarkers.forEach(marker => marker.remove());
+      clusterMarkers = [];
+      document.getElementById('step3-tag-clusters').classList.add('hidden');
+      document.getElementById('step4-submit').classList.remove('hidden');
+    }
+  });
+
+  document.getElementById('skip-cluster-btn').addEventListener('click', () => {
+    const cluster = allClusters[currentClusterIndex];
+    clusterLabels[cluster.id] = { tags: [], comment: '' };
+    
+    if (currentClusterIndex < allClusters.length - 1) {
+      currentClusterIndex++;
+      showCluster(currentClusterIndex);
+    } else {
+      clusterMarkers.forEach(marker => marker.remove());
+      clusterMarkers = [];
+      document.getElementById('step3-tag-clusters').classList.add('hidden');
+      document.getElementById('step4-submit').classList.remove('hidden');
+    }
+  });
+  
+  step3NavigationInitialized = true;
+}
+
+function showClusterMarker(coords, type) {
+  // Remove existing cluster markers
+  clusterMarkers.forEach(marker => marker.remove());
+  clusterMarkers = [];
+  
+  // Create teardrop marker
+  const el = document.createElement('div');
+  el.style.width = '30px';
+  el.style.height = '40px';
+  el.style.position = 'relative';
+  el.innerHTML = `
+    <svg width="30" height="40" viewBox="0 0 30 40" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">
+      <path d="M15,5 C10,5 5,10 5,15 C5,20 15,35 15,35 C15,35 25,20 25,15 C25,10 20,5 15,5 Z" 
+            fill="${type === 'disliked' ? '#ea4335' : '#34a853'}" 
+            stroke="white" 
+            stroke-width="2"/>
+      <circle cx="15" cy="15" r="5" fill="white"/>
+    </svg>
+  `;
+  
+  const marker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
+    .setLngLat(coords)
+    .addTo(map);
+  
+  clusterMarkers.push(marker);
+  
+  // Fly to cluster with closer zoom
+  map.flyTo({
+    center: coords,
+    zoom: 18.5, // Much closer zoom (was 17)
+    pitch: 60, // Good 3D view
+    duration: 1000
+  });
+}
+
+// Next to submit (this button doesn't exist in the HTML, so commenting out)
+// document.getElementById('next-to-submit-btn').addEventListener('click', () => {
+//   clusterMarkers.forEach(marker => marker.remove());
+//   clusterMarkers = [];
+//   document.getElementById('step3-tag-clusters').classList.add('hidden');
+//   document.getElementById('step4-submit').classList.remove('hidden');
+// });
+
+// Submit to Backend
+
+// Step 4 back button
+const step4BackBtn = document.getElementById('step4-back-btn');
+if (step4BackBtn) {
+  step4BackBtn.addEventListener('click', () => {
+    // Go back to Step 3
+    document.getElementById('step-4').classList.remove('active');
+    document.getElementById('step-3').classList.add('active');
+    currentStep = 3;
+  });
+}
+
+document.getElementById('submit-btn').addEventListener('click', async () => {
+  const submitBtn = document.getElementById('submit-btn');
+  submitBtn.disabled = true;
+  const submittingText = currentLang === 'fr' ? 'Envoi en cours...' : 'Submitting...';
+  submitBtn.innerHTML = `<span>${submittingText}</span>`;
+  
+  try {
+    // Collect ground polygons with calculated areas
+    const groundPolygons = groundPaintMarkers.map(paintId => {
+      const source = map.getSource(paintId);
+      if (!source) return null;
+      
+      const data = source._data;
+      
+      // Calculate area in square meters using Turf
+      let area = 0;
+      try {
+        area = turf.area(data.geometry);
+      } catch (e) {
+        console.error('Error calculating ground polygon area:', e);
+      }
+      
+      return {
+        type: data.properties.type,
+        geometry: data.geometry, // GeoJSON polygon geometry
+        center: data.geometry.coordinates[0][0], // First coordinate as approximate center
+        color: data.properties.color,
+        area: Math.round(area) // Area in square meters
+      };
+    }).filter(Boolean);
+    
+    // Prepare submission data in GeoJSON-compatible format
+    console.log('🔍 DEBUG: selectedPoint at submission time:', selectedPoint);
+    
+    const submissionData = {
+      sessionTimestamp: new Date().toISOString(),
+      userLocation: selectedPoint ? {
+        lng: selectedPoint.lng || selectedPoint[0],
+        lat: selectedPoint.lat || selectedPoint[1]
+      } : null,
+      radiusMeters: 1000,
+      dislikedVoxels: Array.from(dislikedVoxels),
+      likedVoxels: Array.from(likedVoxels),
+      groundPolygons: groundPolygons, // NEW: Include ground-painted areas
+      clusters: allClusters.map(cluster => {
+        const labels = clusterLabels[cluster.id] || { tags: [], comment: '' };
+        
+        // Calculate centroid from cluster points
+        // Each point in cluster.points is an object: { coords: [lng, lat, height], type, idx }
+        let avgLng = 0, avgLat = 0, avgHeight = 0;
+        cluster.points.forEach(pt => {
+          avgLng += pt.coords[0];
+          avgLat += pt.coords[1];
+          avgHeight += pt.coords[2] || 0;
+        });
+        const count = cluster.points.length;
+        
+        const centroid = {
+          lng: avgLng / count,
+          lat: avgLat / count,
+          height: avgHeight / count
+        };
+        
+        // Calculate total ground area for this cluster by finding overlapping ground polygons
+        let totalGroundArea = 0;
+        const centroidPoint = turf.point([centroid.lng, centroid.lat]);
+        
+        groundPolygons.forEach(polygon => {
+          if (polygon && polygon.type === cluster.type) {
+            try {
+              // Check if the cluster centroid is within this ground polygon
+              const isInside = turf.booleanPointInPolygon(centroidPoint, polygon.geometry);
+              
+              if (isInside) {
+                // Calculate area of this polygon in square meters
+                const area = turf.area(polygon.geometry);
+                totalGroundArea += area;
+              }
+            } catch (e) {
+              console.error('Error calculating ground area:', e);
+            }
+          }
+        });
+        
+        return {
+          id: cluster.id,
+          type: cluster.type,
+          voxels: cluster.points.map(pt => ({
+            key: `${pt.coords[0].toFixed(6)}_${pt.coords[1].toFixed(6)}_${(pt.coords[2] || 0).toFixed(1)}`,
+            lng: pt.coords[0],
+            lat: pt.coords[1],
+            height: pt.coords[2] || 0
+          })),
+          centroid: centroid,
+          groundAreaM2: Math.round(totalGroundArea),
+          tags: labels.tags,
+          comment: labels.comment
+        };
+      })
+    };
+    
+    // Send to backend
+    const API_URL = 'http://localhost:3000/api/submissions';
+    
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(submissionData)
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      // Calculate ground area in m² for liked and disliked areas
+      let dislikedAreaM2 = 0;
+      let likedAreaM2 = 0;
+      
+      groundPolygons.forEach(polygon => {
+        if (polygon && polygon.geometry && polygon.geometry.coordinates) {
+          // Use turf to calculate area
+          const area = turf.area(polygon.geometry); // Returns area in m²
+          
+          if (polygon.type === 'disliked') {
+            dislikedAreaM2 += area;
+          } else if (polygon.type === 'liked') {
+            likedAreaM2 += area;
+          }
+        }
+      });
+      
+      // Round to whole numbers
+      dislikedAreaM2 = Math.round(dislikedAreaM2);
+      likedAreaM2 = Math.round(likedAreaM2);
+      
+      // Translations for success message
+      const successTitle = currentLang === 'fr' ? 'Soumission réussie !' : 'Submission Successful!';
+      const submissionIdLabel = currentLang === 'fr' ? 'ID de soumission :' : 'Submission ID:';
+      const dislikedLabel = currentLang === 'fr' ? 'Zones non appréciées :' : 'Disliked areas:';
+      const likedLabel = currentLang === 'fr' ? 'Zones appréciées :' : 'Liked areas:';
+      const groundLabel = currentLang === 'fr' ? 'Polygones au sol :' : 'Ground polygons:';
+      const clustersLabel = currentLang === 'fr' ? 'Clusters étiquetés :' : 'Labeled clusters:';
+      const thankYouMsg = currentLang === 'fr' ? 'Merci pour votre contribution !' : 'Thank you for your contribution!';
+      const okText = currentLang === 'fr' ? 'OK' : 'OK';
+      
+      const overlay = document.createElement('div');
+      overlay.className = 'custom-alert-overlay';
+      overlay.innerHTML = `
+        <div class="custom-alert">
+          <h3>${successTitle}</h3>
+          <div class="custom-alert-content">
+            <div style="margin-bottom: 15px; padding: 10px; background: #f0f7ff; border-radius: 6px;">
+              <strong>${submissionIdLabel}</strong><br>
+              <span style="font-size: 11px; color: #666; word-break: break-all;">${result.submissionId}</span>
+            </div>
+            <div style="margin-bottom: 10px;">
+              <strong style="color: #ea4335;">${dislikedLabel}</strong> ${result.stats.dislikedVoxels} voxels<br>
+              <span style="color: #666; font-size: 12px; margin-left: 4px;">(${dislikedAreaM2.toLocaleString()} m² au sol)</span>
+            </div>
+            <div style="margin-bottom: 10px;">
+              <strong style="color: #34a853;">${likedLabel}</strong> ${result.stats.likedVoxels} voxels<br>
+              <span style="color: #666; font-size: 12px; margin-left: 4px;">(${likedAreaM2.toLocaleString()} m² au sol)</span>
+            </div>
+            <div style="margin-bottom: 10px;">
+              <strong>${groundLabel}</strong> ${result.stats.groundPolygons}
+            </div>
+            <div style="margin-bottom: 10px;">
+              <strong>${clustersLabel}</strong> ${result.stats.clusters}
+            </div>
+            <p style="margin-top: 15px; color: #666; font-size: 13px;">${thankYouMsg}</p>
+          </div>
+          <button class="custom-alert-button" id="submission-ok-btn">
+            ${okText}
+          </button>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      
+      // Add event listener to reset to Step 1
+      document.getElementById('submission-ok-btn').addEventListener('click', () => {
+        overlay.remove();
+        
+        // Remove center marker
+        if (centerMarker) { 
+          centerMarker.remove(); 
+          centerMarker = null; 
+        }
+        
+        // Remove all map layers (voxels, trees, radius circle)
+        if (map.getLayer('voxel-fill')) { 
+          map.removeLayer('voxel-fill'); 
+          map.removeSource('voxel-cubes'); 
+        }
+        if (map.getLayer('tree-cubes')) { 
+          map.removeLayer('tree-cubes'); 
+          map.removeSource('tree-cubes'); 
+        }
+        if (map.getLayer('radius-circle-fill')) { 
+          map.removeLayer('radius-circle-fill'); 
+          map.removeLayer('radius-circle-line'); 
+          map.removeSource('radius-circle'); 
+        }
+        
+        // Remove ground paint markers
+        groundPaintMarkers.forEach(paintId => {
+          if (map.getLayer(paintId)) {
+            map.removeLayer(paintId);
+            map.removeSource(paintId);
+          }
+        });
+        groundPaintMarkers = [];
+        
+        // Remove painted overlays
+        paintedOverlays.forEach(overlayId => {
+          try {
+            if (map.getLayer(overlayId)) map.removeLayer(overlayId);
+            if (map.getSource(overlayId)) map.removeSource(overlayId);
+          } catch(e) {}
+        });
+        paintedOverlays = [];
+        
+        // Remove cluster markers
+        clusterMarkers.forEach(marker => marker.remove());
+        clusterMarkers = [];
+        
+        // Remove tool preview
+        removeToolPreview();
+        
+        // Reset voxel data
+        voxelsLoaded = false;
+        voxelSpatialIndex = null;
+        allVoxelFeatures = [];
+        dislikedVoxels.clear();
+        likedVoxels.clear();
+        
+        // Reset state variables
+        currentTool = 'cursor';
+        currentPaintColor = 'liked';
+        isDragging = false;
+        clusterLabels = {};
+        allClusters = [];
+        selectedClusterId = null;
+        
+        // Clear selected point (wrapped in try-catch)
+        try {
+          if (typeof selectedPointMarker !== 'undefined' && selectedPointMarker) {
+            selectedPointMarker.remove();
+            selectedPointMarker = null;
+          }
+        } catch(e) {
+          console.log('selectedPointMarker cleanup skipped:', e);
+        }
+        
+        try {
+          if (typeof selectedPoint !== 'undefined') {
+            selectedPoint = null;
+          }
+        } catch(e) {
+          console.log('selectedPoint cleanup skipped:', e);
+        }
+        
+        // Re-enable map interactions
+        map.dragPan.enable();
+        map.scrollZoom.enable();
+        
+        // Hide all steps except Step 1, Show Step 1
+        document.getElementById('step2-paint').classList.add('hidden');
+        document.getElementById('step3-tag-clusters').classList.add('hidden');
+        document.getElementById('step4-submit').classList.add('hidden');
+        document.getElementById('step1').classList.remove('hidden');
+        
+        // Reset Step 1 UI elements
+        document.getElementById('location-selected').classList.add('hidden');
+        document.getElementById('click-instruction').classList.remove('hidden');
+        document.getElementById('address-suggestions').classList.add('hidden');
+        document.getElementById('address-input').value = '';
+        
+        // Clear clusters list
+        document.getElementById('clusters-list').innerHTML = '';
+        
+        // Hide reset button
+        document.getElementById('reset-btn').classList.add('hidden');
+        
+        // Reset tool selection
+        document.getElementById('tool-cursor').classList.add('active');
+        document.getElementById('tool-paint').classList.remove('active');
+        document.getElementById('tool-erase').classList.remove('active');
+        document.getElementById('paint-green').classList.add('active');
+        document.getElementById('paint-red').classList.remove('active');
+        
+        // Hide map nav controls
+        document.getElementById('map-nav-controls').classList.remove('active');
+        
+        // Fly back to Montreal center
+        map.flyTo({
+          center: MONTREAL_CENTER,
+          zoom: 12,
+          pitch: 45,
+          bearing: -17,
+          duration: 1500
+        });
+      });
+    } else {
+      throw new Error(result.error || 'Submission failed');
+    }
+    
+  } catch (error) {
+    console.error('Submission error:', error);
+    const lang = (typeof currentLang !== 'undefined') ? currentLang : 'fr';
+    const title = lang === 'fr' ? 'Erreur' : 'Error';
+    const message = lang === 'fr'
+      ? `Erreur lors de la soumission des données :<br><br>${error.message}<br><br>Assurez-vous que le serveur backend est en cours d'exécution.`
+      : `Error submitting data:<br><br>${error.message}<br><br>Please make sure the backend server is running.`;
+    showCustomAlert(title, message);
+  } finally {
+    submitBtn.disabled = false;
+    const submitText = currentLang === 'fr' ? 'Soumettre' : 'Submit';
+    submitBtn.innerHTML = `<span data-en="Submit" data-fr="Soumettre">${submitText}</span>`;
+  }
+});
+
+// View controls
+const pitchSlider = document.getElementById('pitch-slider');
+if (pitchSlider) {
+  pitchSlider.addEventListener('input', (e) => {
+    const pitch = parseInt(e.target.value);
+    document.getElementById('pitch-value').textContent = pitch;
+    map.setPitch(pitch);
+    console.log('Pitch set to:', pitch);
+  });
+} else {
+  console.error('pitch-slider element not found');
+}
+
+const toggleBuildings = document.getElementById('toggle-buildings');
+if (toggleBuildings) {
+  toggleBuildings.addEventListener('change', (e) => {
+    console.log('Toggle buildings:', e.target.checked);
+    if (map.getLayer('voxel-fill')) {
+      map.setLayoutProperty('voxel-fill', 'visibility', e.target.checked ? 'visible' : 'none');
+      console.log('Building visibility set to:', e.target.checked ? 'visible' : 'none');
+    } else {
+      console.warn('voxel-fill layer not found');
+    }
+  });
+} else {
+  console.error('toggle-buildings element not found');
+}
+
+const toggleTrees = document.getElementById('toggle-trees');
+if (toggleTrees) {
+  toggleTrees.addEventListener('change', (e) => {
+    console.log('Toggle trees:', e.target.checked);
+    if (map.getLayer('tree-cubes')) {
+      map.setLayoutProperty('tree-cubes', 'visibility', e.target.checked ? 'visible' : 'none');
+      console.log('Trees visibility set to:', e.target.checked ? 'visible' : 'none');
+    } else {
+      console.warn('tree-cubes layer not found');
+    }
+  });
+} else {
+  console.error('toggle-trees element not found');
+}
+
+const toggleRadius = document.getElementById('toggle-radius');
+if (toggleRadius) {
+  toggleRadius.addEventListener('change', (e) => {
+    if (map.getLayer('radius-circle-fill')) {
+      const v = e.target.checked ? 'visible' : 'none';
+      map.setLayoutProperty('radius-circle-fill', 'visibility', v);
+      map.setLayoutProperty('radius-circle-line', 'visibility', v);
+    }
+  });
+}
+
+// Satellite toggle
+let satelliteLayerAdded = false;
+
+const toggleSatellite = document.getElementById('toggle-satellite');
+if (toggleSatellite) {
+  toggleSatellite.addEventListener('change', (e) => {
+    console.log('Toggle satellite:', e.target.checked);
+    if (e.target.checked) {
+      addSatelliteLayer();
+    } else {
+      removeSatelliteLayer();
+    }
+  });
+} else {
+  console.error('toggle-satellite element not found');
+}
+
+function addSatelliteLayer() {
+  if (!satelliteLayerAdded) {
+    try {
+      map.addSource('google-satellite', {
+        type: 'raster',
+        tiles: [
+          'https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+          'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'
+        ],
+        tileSize: 256
+      });
+      
+      // Insert before voxels if they exist, otherwise just add
+      const beforeLayer = map.getLayer('voxel-fill') ? 'voxel-fill' : undefined;
+      
+      map.addLayer({
+        id: 'google-satellite-layer',
+        type: 'raster',
+        source: 'google-satellite',
+        paint: { 'raster-opacity': 0.6 }
+      }, beforeLayer);
+      
+      satelliteLayerAdded = true;
+      console.log('✓ Satellite layer added');
+    } catch (error) {
+      console.error('Error adding satellite layer:', error);
+    }
+  }
+}
+
+function removeSatelliteLayer() {
+  if (satelliteLayerAdded) {
+    if (map.getLayer('google-satellite-layer')) {
+      map.removeLayer('google-satellite-layer');
+    }
+    if (map.getSource('google-satellite')) {
+      map.removeSource('google-satellite');
+    }
+    satelliteLayerAdded = false;
+  }
+}
+
+// Reset
+document.getElementById('reset-btn').addEventListener('click', () => {
+  if (centerMarker) { centerMarker.remove(); centerMarker = null; }
+  
+  if (map.getLayer('voxel-fill')) { map.removeLayer('voxel-fill'); map.removeSource('voxel-cubes'); }
+  if (map.getLayer('tree-cubes')) { map.removeLayer('tree-cubes'); map.removeSource('tree-cubes'); }
+  if (map.getLayer('radius-circle-fill')) { 
+    map.removeLayer('radius-circle-fill'); 
+    map.removeLayer('radius-circle-line'); 
+    map.removeSource('radius-circle'); 
+  }
+  
+  groundPaintMarkers.forEach(paintId => {
+    if (map.getLayer(paintId)) {
+      map.removeLayer(paintId);
+      map.removeSource(paintId);
+    }
+  });
+  groundPaintMarkers = [];
+  
+  clusterMarkers.forEach(marker => marker.remove());
+  clusterMarkers = [];
+  
+  removeToolPreview();
+  
+  if (map.getLayer('building')) map.setLayoutProperty('building', 'visibility', 'visible');
+  
+  voxelsLoaded = false;
+  voxelSpatialIndex = null;
+  currentTool = 'cursor';
+  currentPaintColor = 'liked';
+  dislikedVoxels.clear();
+  likedVoxels.clear();
+  allVoxelFeatures = [];
+  isDragging = false;
+  clusterLabels = {};
+  selectedClusterId = null;
+  
+  map.dragPan.enable();
+  map.scrollZoom.enable();
+  
+  // Reset UI
+  document.getElementById('step1').classList.remove('hidden');
+  document.getElementById('step2-paint').classList.add('hidden');
+  document.getElementById('step3-tag-clusters').classList.add('hidden');
+  document.getElementById('step4-submit').classList.add('hidden');
+  
+  document.getElementById('location-selected').classList.add('hidden');
+  document.getElementById('click-instruction').classList.remove('hidden');
+  document.getElementById('address-suggestions').classList.add('hidden');
+  document.getElementById('address-input').value = '';
+  
+  document.getElementById('clusters-list').innerHTML = '';
+  document.getElementById('reset-btn').classList.add('hidden');
+  
+  document.getElementById('tool-cursor').classList.add('active');
+  document.getElementById('tool-paint').classList.remove('active');
+  document.getElementById('tool-erase').classList.remove('active');
+  document.getElementById('paint-green').classList.add('active');
+  document.getElementById('paint-red').classList.remove('active');
+  
+  map.flyTo({
+    center: MONTREAL_CENTER,
+    zoom: 12,
+    pitch: 45,
+    bearing: -17,
+    duration: 1500
+  });
+  
+});
+
+
+}); // End DOMContentLoaded
+
+</script>
+
+</body>
+</html>

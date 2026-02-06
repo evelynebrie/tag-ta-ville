@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Montreal Voxel Map</title>
+  <script src='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'></script>
+  <link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
+  <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+  
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    
+    #map { width: 100vw; height: 100vh; }
+    
+    .panel {
+      position: fixed;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    }
+    
+    .control-panel {
+      top: 20px;
+      left: 20px;
+      min-width: 320px;
+      max-width: 320px;
+    }
+    
+    .control-panel h2 { font-size: 18px; margin-bottom: 15px; color: #333; }
+    
+    .step { margin-bottom: 20px; }
+    .step-label { font-size: 14px; font-weight: 600; color: #555; margin-bottom: 8px; display: block; }
+    
+    .button-group { display: flex; gap: 10px; margin-bottom: 10px; }
+    
+    .btn {
+      flex: 1;
+      padding: 10px;
+      border: 2px solid #4285f4;
+      background: white;
+      color: #4285f4;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn:hover { background: #f0f7ff; }
+    .btn.active { background: #4285f4; color: white; }
+    
+    .address-input {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+    
+    .address-input:focus { outline: none; border-color: #4285f4; }
+    
+    .search-btn, .confirm-btn {
+      width: 100%;
+      padding: 10px;
+      background: #4285f4;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    
+    .confirm-btn {
+      background: #34a853;
+      padding: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      margin-top: 10px;
+    }
+    
+    .search-btn:hover { background: #357ae8; }
+    .confirm-btn:hover { background: #2d9348; }
+    
+    .cancel-btn {
+      width: 100%;
+      padding: 10px;
+      background: white;
+      color: #666;
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    
+    .cancel-btn:hover { background: #f5f5f5; }
+    
+    .instruction {
+      font-size: 13px;
+      color: #666;
+      padding: 10px;
+      background: #f5f5f5;
+      border-radius: 4px;
+      margin-top: 5px;
+    }
+    
+    .info-panel {
+      bottom: 20px;
+      left: 20px;
+      font-size: 13px;
+    }
+    
+    .info-row { margin-bottom: 5px; }
+    .info-label { font-weight: 600; color: #555; margin-right: 5px; }
+    .status { color: #34a853; font-weight: 500; }
+    .status.loading { color: #fbbc04; }
+    
+    .controls-panel {
+      top: 20px;
+      right: 20px;
+    }
+    
+    .controls-panel h3 { font-size: 16px; margin-bottom: 15px; color: #333; }
+    .control-group { margin-bottom: 15px; }
+    .control-label { display: block; font-size: 13px; font-weight: 500; color: #555; margin-bottom: 8px; }
+    
+    .slider {
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: #ddd;
+      outline: none;
+    }
+    
+    .toggle-label {
+      display: block;
+      font-size: 13px;
+      color: #555;
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+    
+    .toggle-label input { margin-right: 8px; }
+    
+    .reset-btn {
+      width: 100%;
+      padding: 10px;
+      background: #ea4335;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    
+    .reset-btn:hover { background: #d33828; }
+    .hidden { display: none !important; }
+    
+    .selected-info {
+      background: #e8f5e9;
+      padding: 12px;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      border-left: 4px solid #34a853;
+    }
+    
+    .selected-info div {
+      font-size: 13px;
+      color: #333;
+      margin-bottom: 4px;
+    }
+    
+    .selected-info div:last-child { margin-bottom: 0; }
+  </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div class="panel control-panel" id="selection-panel">
+  <h2>🎯 Step 1: Select Location</h2>
+  
+  <div class="step">
+    <span class="step-label">Choose Method</span>
+    <div class="button-group">
+      <button class="btn active" id="btn-click">Click Map</button>
+      <button class="btn" id="btn-address">Enter Address</button>
+    </div>
+  </div>
+  
+  <div class="step hidden" id="address-section">
+    <input type="text" class="address-input" id="address-input" placeholder="e.g. 1234 Rue Saint-Denis" />
+    <button class="search-btn" id="search-btn">Search Address</button>
+  </div>
+  
+  <div class="step" id="click-section">
+    <div class="instruction">👆 Click anywhere on the map to select your center point</div>
+  </div>
+</div>
+
+<div class="panel control-panel hidden" id="confirmation-panel">
+  <h2>✓ Step 2: Confirm Selection</h2>
+  
+  <div class="selected-info">
+    <div><strong>📍 Location Selected</strong></div>
+    <div id="coords-display">Lat: 45.5017, Lng: -73.5673</div>
+    <div>🔵 Radius: 1 km</div>
+  </div>
+  
+  <button class="confirm-btn" id="confirm-btn">Confirm & Load Data</button>
+  <button class="cancel-btn" id="cancel-btn">Change Location</button>
+</div>
+
+<div class="panel info-panel">
+  <div class="info-row">
+    <span class="info-label">Status:</span>
+    <span class="status" id="status">Loading map...</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">Buildings:</span>
+    <span id="buildings-count">0</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">Trees:</span>
+    <span id="trees-count">0</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">Voxels:</span>
+    <span id="voxels-count">0</span>
+  </div>
+</div>
+
+<div class="panel controls-panel">
+  <h3>View Controls</h3>
+  
+  <div class="control-group">
+    <label class="control-label">
+      Viewing Angle: <span id="pitch-value">45</span>°
+    </label>
+    <input type="range" min="0" max="85" value="45" class="slider" id="pitch-slider" />
+  </div>
+  
+  <div class="control-group">
+    <label class="toggle-label">
+      <input type="checkbox" id="toggle-buildings" checked />
+      Show Buildings
+    </label>
+    <label class="toggle-label">
+      <input type="checkbox" id="toggle-trees" checked />
+      Show Trees
+    </label>
+    <label class="toggle-label">
+      <input type="checkbox" id="toggle-radius" checked />
+      Show Radius Circle
+    </label>
+  </div>
+  
+  <button class="reset-btn hidden" id="reset-btn">Reset & Select New Point</button>
+</div>
+
+<script>
+mapboxgl.accessToken = 'pk.eyJ1IjoiZXZlbHluZWJyaWUiLCJhIjoiY2themE5OGF2MDdxazJybG9oNzUyaXoxNSJ9.njPe2lcTp82DKjDeGkHaQA';
+
+const MONTREAL_CENTER = [-73.5673, 45.5017];
+const MONTREAL_GRID_ROTATION = -33;
+const RADIUS_KM = 1;
+
+let map, selectedPoint = null, selectionMode = 'click', centerMarker = null;
+let allBuildingsData = null, allTreesData = [], dataLoaded = false;
+
+map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/mapbox/light-v11',
+  center: MONTREAL_CENTER,
+  zoom: 12,
+  pitch: 45,
+  bearing: -17
+});
+
+map.on('load', () => {
+  console.log('Map loaded');
+  setStatus('Ready - Select a point');
+  loadAllData();
+});
+
+async function loadAllData() {
+  try {
+    const response = await fetch('./tiles/tile_manifest.json');
+    const manifest = await response.json();
+    
+    const tilePromises = manifest.tiles.map(async (tile) => {
+      const resp = await fetch(`./tiles/${tile.file}`);
+      const blob = await resp.blob();
+      const buffer = await blob.arrayBuffer();
+      const decompressed = pako.ungzip(new Uint8Array(buffer), { to: 'string' });
+      return JSON.parse(decompressed).features;
+    });
+    
+    const allTiles = await Promise.all(tilePromises);
+    allBuildingsData = allTiles.flat();
+    console.log(`Loaded ${allBuildingsData.length} buildings`);
+  } catch (error) {
+    console.error('Error loading buildings:', error);
+  }
+  
+  const treeFiles = ['arbres-part-aa.csv', 'arbres-part-ab.csv', 'arbres-part-ac.csv',
+                     'arbres-part-ad.csv', 'arbres-part-ae.csv', 'arbres-part-af.csv', 'arbres-part-ag.csv'];
+  
+  let loaded = 0;
+  treeFiles.forEach(file => {
+    Papa.parse(file, {
+      download: true,
+      header: true,
+      complete: (r) => {
+        allTreesData = allTreesData.concat(r.data);
+        if (++loaded === treeFiles.length) {
+          console.log(`Loaded ${allTreesData.length} trees`);
+          dataLoaded = true;
+        }
+      },
+      error: (e) => { console.error(`Error loading ${file}:`, e); loaded++; }
+    });
+  });
+}
+
+document.getElementById('btn-click').addEventListener('click', () => {
+  selectionMode = 'click';
+  document.getElementById('btn-click').classList.add('active');
+  document.getElementById('btn-address').classList.remove('active');
+  document.getElementById('address-section').classList.add('hidden');
+  document.getElementById('click-section').classList.remove('hidden');
+});
+
+document.getElementById('btn-address').addEventListener('click', () => {
+  selectionMode = 'address';
+  document.getElementById('btn-address').classList.add('active');
+  document.getElementById('btn-click').classList.remove('active');
+  document.getElementById('address-section').classList.remove('hidden');
+  document.getElementById('click-section').classList.add('hidden');
+});
+
+document.getElementById('search-btn').addEventListener('click', searchAddress);
+document.getElementById('address-input').addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') searchAddress();
+});
+
+async function searchAddress() {
+  const addr = document.getElementById('address-input').value.trim();
+  if (!addr) return;
+  
+  setStatus('Searching...', true);
+  const text = addr.includes('Montreal') ? addr : `${addr}, Montreal, Quebec`;
+  const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(text)}.json?access_token=${mapboxgl.accessToken}&bbox=-73.98,45.40,-73.48,45.70&limit=1`;
+  
+  try {
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (data.features && data.features.length > 0) {
+      const [lng, lat] = data.features[0].center;
+      selectPoint({ lng, lat });
+      map.flyTo({ center: [lng, lat], zoom: 16, duration: 1500 });
+    } else {
+      alert('Address not found');
+      setStatus('Ready');
+    }
+  } catch (error) {
+    console.error('Geocoding error:', error);
+    alert('Error searching address');
+    setStatus('Ready');
+  }
+}
+
+map.on('click', (e) => {
+  if (selectionMode === 'click' && document.getElementById('confirmation-panel').classList.contains('hidden')) {
+    selectPoint(e.lngLat);
+  }
+});
+
+function selectPoint(lngLat) {
+  selectedPoint = lngLat;
+  
+  if (centerMarker) centerMarker.remove();
+  
+  const el = document.createElement('div');
+  el.style.width = '20px';
+  el.style.height = '20px';
+  el.style.backgroundColor = '#ea4335';
+  el.style.borderRadius = '50%';
+  el.style.border = '3px solid white';
+  el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+  
+  centerMarker = new mapboxgl.Marker({ element: el })
+    .setLngLat([lngLat.lng, lngLat.lat])
+    .addTo(map);
+  
+  drawRadiusCircle(lngLat);
+  
+  document.getElementById('coords-display').textContent = 
+    `Lat: ${lngLat.lat.toFixed(4)}, Lng: ${lngLat.lng.toFixed(4)}`;
+  
+  document.getElementById('selection-panel').classList.add('hidden');
+  document.getElementById('confirmation-panel').classList.remove('hidden');
+  
+  setStatus('Point selected - Confirm to load');
+}
+
+function drawRadiusCircle(center) {
+  const circle = turf.circle([center.lng, center.lat], RADIUS_KM, { steps: 64, units: 'kilometers' });
+  
+  if (map.getSource('radius-circle')) {
+    map.getSource('radius-circle').setData(circle);
+  } else {
+    map.addSource('radius-circle', { type: 'geojson', data: circle });
+    
+    map.addLayer({
+      id: 'radius-circle-fill',
+      type: 'fill',
+      source: 'radius-circle',
+      paint: { 'fill-color': '#ea4335', 'fill-opacity': 0.1 }
+    });
+    
+    map.addLayer({
+      id: 'radius-circle-line',
+      type: 'line',
+      source: 'radius-circle',
+      paint: { 'line-color': '#ea4335', 'line-width': 3, 'line-dasharray': [2, 2] }
+    });
+  }
+}
+
+document.getElementById('cancel-btn').addEventListener('click', () => {
+  document.getElementById('confirmation-panel').classList.add('hidden');
+  document.getElementById('selection-panel').classList.remove('hidden');
+  setStatus('Ready - Select a point');
+});
+
+document.getElementById('confirm-btn').addEventListener('click', () => {
+  if (!selectedPoint) return;
+  if (!dataLoaded) {
+    alert('Data still loading, please wait...');
+    return;
+  }
+  
+  document.getElementById('confirmation-panel').classList.add('hidden');
+  document.getElementById('reset-btn').classList.remove('hidden');
+  loadVoxelsAndTrees(selectedPoint);
+});
+
+async function loadVoxelsAndTrees(center) {
+  setStatus('Processing...', true);
+  
+  const buildingsInRadius = allBuildingsData.filter(b => {
+    try {
+      const c = turf.center(b);
+      const d = turf.distance([center.lng, center.lat], c.geometry.coordinates, { units: 'kilometers' });
+      return d <= RADIUS_KM;
+    } catch (e) { return false; }
+  });
+  
+  console.log(`Buildings in radius: ${buildingsInRadius.length}`);
+  document.getElementById('buildings-count').textContent = buildingsInRadius.length;
+  
+  setTimeout(() => {
+    processVoxels(buildingsInRadius, center);
+    processTreesInRadius(center);
+  }, 100);
+}
+
+function processVoxels(buildings, center) {
+  const CUBE_SIZE = 5, centerLat = center.lat;
+  const metersPerDegreeLat = 111320;
+  const metersPerDegreeLon = 111320 * Math.cos(centerLat * Math.PI / 180);
+  const cubeSizeDegLat = CUBE_SIZE / metersPerDegreeLat;
+  const cubeSizeDegLon = CUBE_SIZE / metersPerDegreeLon;
+  const rotationRad = (MONTREAL_GRID_ROTATION * Math.PI) / 180;
+  
+  const allCubes = [];
+  
+  buildings.forEach(building => {
+    const height = building.properties?.height || 10;
+    const geometry = building.geometry;
+    if (!geometry) return;
+    
+    try {
+      let poly = geometry.type === 'Polygon' ? turf.polygon(geometry.coordinates) : turf.polygon(geometry.coordinates[0]);
+      
+      const bbox = turf.bbox(poly);
+      const [minLon, minLat, maxLon, maxLat] = bbox;
+      const centerLon = (minLon + maxLon) / 2, centerLat = (minLat + maxLat) / 2;
+      const numLayers = Math.ceil(height / CUBE_SIZE);
+      
+      for (let layer = 0; layer < numLayers; layer++) {
+        const baseHeight = layer * CUBE_SIZE;
+        const topHeight = Math.min((layer + 1) * CUBE_SIZE, height);
+        
+        let color = baseHeight < 25 ? '#90a4ae' : baseHeight < 50 ? '#78909c' : 
+                    baseHeight < 75 ? '#607d8b' : baseHeight < 100 ? '#546e7a' : '#455a64';
+        
+        for (let lat = minLat; lat <= maxLat; lat += cubeSizeDegLat) {
+          for (let lon = minLon; lon <= maxLon; lon += cubeSizeDegLon) {
+            const gap = 0.05, gapLat = cubeSizeDegLat * gap, gapLon = cubeSizeDegLon * gap;
+            
+            const localLon = lon - centerLon, localLat = lat - centerLat;
+            const rotatedLon = localLon * Math.cos(rotationRad) - localLat * Math.sin(rotationRad);
+            const rotatedLat = localLon * Math.sin(rotationRad) + localLat * Math.cos(rotationRad);
+            const finalLon = rotatedLon + centerLon, finalLat = rotatedLat + centerLat;
+            
+            const cubeSquare = turf.polygon([[
+              [finalLon + gapLon, finalLat + gapLat],
+              [finalLon + cubeSizeDegLon - gapLon, finalLat + gapLat],
+              [finalLon + cubeSizeDegLon - gapLon, finalLat + cubeSizeDegLat - gapLat],
+              [finalLon + gapLon, finalLat + cubeSizeDegLat - gapLat],
+              [finalLon + gapLon, finalLat + gapLat]
+            ]]);
+            
+            try {
+              if (turf.booleanIntersects(cubeSquare, poly)) {
+                allCubes.push({
+                  type: 'Feature',
+                  properties: { height: topHeight, base: baseHeight + 0.2, color: color },
+                  geometry: cubeSquare.geometry
+                });
+              }
+            } catch (e) {}
+          }
+        }
+      }
+    } catch (e) {}
+  });
+  
+  console.log(`Generated ${allCubes.length} voxels`);
+  document.getElementById('voxels-count').textContent = allCubes.length.toLocaleString();
+  
+  if (map.getSource('voxel-cubes')) {
+    map.getSource('voxel-cubes').setData({ type: 'FeatureCollection', features: allCubes });
+  } else {
+    map.addSource('voxel-cubes', { type: 'geojson', data: { type: 'FeatureCollection', features: allCubes }});
+    map.addLayer({
+      id: 'voxel-fill',
+      type: 'fill-extrusion',
+      source: 'voxel-cubes',
+      paint: {
+        'fill-extrusion-color': ['get', 'color'],
+        'fill-extrusion-height': ['get', 'height'],
+        'fill-extrusion-base': ['get', 'base'],
+        'fill-extrusion-opacity': 0.9,
+        'fill-extrusion-vertical-gradient': true
+      }
+    });
+  }
+  
+  if (map.getLayer('building')) map.setLayoutProperty('building', 'visibility', 'none');
+  setStatus('Ready');
+}
+
+function processTreesInRadius(center) {
+  const treeCubes = [];
+  
+  allTreesData.forEach(tree => {
+    const lon = parseFloat(tree.Longitude), lat = parseFloat(tree.Latitude);
+    if (isNaN(lon) || isNaN(lat)) return;
+    
+    const d = turf.distance([center.lng, center.lat], [lon, lat], { units: 'kilometers' });
+    if (d > RADIUS_KM) return;
+    
+    const height = parseFloat(tree.Hauteur_totale) || 8;
+    const TREE_SIZE = 3;
+    const metersPerDegreeLat = 111320;
+    const metersPerDegreeLon = 111320 * Math.cos(lat * Math.PI / 180);
+    const treeSizeDegLat = TREE_SIZE / metersPerDegreeLat;
+    const treeSizeDegLon = TREE_SIZE / metersPerDegreeLon;
+    
+    treeCubes.push({
+      type: 'Feature',
+      properties: { height: height, base: 0, color: '#66bb6a' },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [[
+          [lon - treeSizeDegLon/2, lat - treeSizeDegLat/2],
+          [lon + treeSizeDegLon/2, lat - treeSizeDegLat/2],
+          [lon + treeSizeDegLon/2, lat + treeSizeDegLat/2],
+          [lon - treeSizeDegLon/2, lat + treeSizeDegLat/2],
+          [lon - treeSizeDegLon/2, lat - treeSizeDegLat/2]
+        ]]
+      }
+    });
+  });
+  
+  console.log(`Generated ${treeCubes.length} trees`);
+  document.getElementById('trees-count').textContent = treeCubes.length;
+  
+  if (map.getSource('tree-cubes')) {
+    map.getSource('tree-cubes').setData({ type: 'FeatureCollection', features: treeCubes });
+  } else if (treeCubes.length > 0) {
+    map.addSource('tree-cubes', { type: 'geojson', data: { type: 'FeatureCollection', features: treeCubes }});
+    map.addLayer({
+      id: 'tree-cubes',
+      type: 'fill-extrusion',
+      source: 'tree-cubes',
+      paint: {
+        'fill-extrusion-color': ['get', 'color'],
+        'fill-extrusion-height': ['get', 'height'],
+        'fill-extrusion-base': ['get', 'base'],
+        'fill-extrusion-opacity': 0.8,
+        'fill-extrusion-vertical-gradient': true
+      }
+    });
+  }
+}
+
+document.getElementById('pitch-slider').addEventListener('input', (e) => {
+  const pitch = parseInt(e.target.value);
+  document.getElementById('pitch-value').textContent = pitch;
+  map.setPitch(pitch);
+});
+
+document.getElementById('toggle-buildings').addEventListener('change', (e) => {
+  if (map.getLayer('voxel-fill')) {
+    map.setLayoutProperty('voxel-fill', 'visibility', e.target.checked ? 'visible' : 'none');
+  }
+});
+
+document.getElementById('toggle-trees').addEventListener('change', (e) => {
+  if (map.getLayer('tree-cubes')) {
+    map.setLayoutProperty('tree-cubes', 'visibility', e.target.checked ? 'visible' : 'none');
+  }
+});
+
+document.getElementById('toggle-radius').addEventListener('change', (e) => {
+  if (map.getLayer('radius-circle-fill')) {
+    const v = e.target.checked ? 'visible' : 'none';
+    map.setLayoutProperty('radius-circle-fill', 'visibility', v);
+    map.setLayoutProperty('radius-circle-line', 'visibility', v);
+  }
+});
+
+document.getElementById('reset-btn').addEventListener('click', () => {
+  if (centerMarker) { centerMarker.remove(); centerMarker = null; }
+  
+  if (map.getLayer('voxel-fill')) { map.removeLayer('voxel-fill'); map.removeSource('voxel-cubes'); }
+  if (map.getLayer('tree-cubes')) { map.removeLayer('tree-cubes'); map.removeSource('tree-cubes'); }
+  if (map.getLayer('radius-circle-fill')) { 
+    map.removeLayer('radius-circle-fill'); 
+    map.removeLayer('radius-circle-line'); 
+    map.removeSource('radius-circle'); 
+  }
+  
+  if (map.getLayer('building')) map.setLayoutProperty('building', 'visibility', 'visible');
+  
+  selectedPoint = null;
+  document.getElementById('selection-panel').classList.remove('hidden');
+  document.getElementById('confirmation-panel').classList.add('hidden');
+  document.getElementById('reset-btn').classList.add('hidden');
+  document.getElementById('buildings-count').textContent = '0';
+  document.getElementById('trees-count').textContent = '0';
+  document.getElementById('voxels-count').textContent = '0';
+  document.getElementById('address-input').value = '';
+  
+  map.flyTo({
+    center: MONTREAL_CENTER,
+    zoom: 12,
+    pitch: 45,
+    bearing: -17,
+    duration: 1500
+  });
+  
+  setStatus('Ready - Select a point');
+});
+
+function setStatus(text, loading = false) {
+  const el = document.getElementById('status');
+  el.textContent = text;
+  el.className = loading ? 'status loading' : 'status';
+}
+</script>
+
+</body>
+</html>

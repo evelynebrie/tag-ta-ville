@@ -1,0 +1,2773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tag ta Ville</title>
+  <script src='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'></script>
+  <link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
+  <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+  
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    
+    #map { width: 100vw; height: 100vh; }
+    
+    .panel {
+      position: fixed;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    }
+    
+    /* Main Control Panel - Top Left */
+    .main-panel {
+      top: 20px;
+      left: 20px;
+      width: 340px;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+      padding: 20px;
+    }
+    
+    .main-panel h2 {
+      font-size: 22px;
+      margin-bottom: 20px;
+      color: #1a73e8;
+      font-weight: 700;
+    }
+    
+    .step-section {
+      margin-bottom: 20px;
+    }
+    
+    .step-header {
+      font-size: 15px;
+      font-weight: 600;
+      color: #1a73e8;
+      margin-bottom: 12px;
+      padding: 8px 12px;
+      background: #e8f0fe;
+      border-radius: 4px;
+    }
+    
+    .step-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #555;
+      margin-bottom: 8px;
+    }
+    
+    .button-group {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    
+    .btn {
+      flex: 1;
+      padding: 10px;
+      border: 2px solid #4285f4;
+      background: white;
+      color: #4285f4;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn:hover { background: #f0f7ff; }
+    .btn.active { background: #4285f4; color: white; }
+    
+    .address-input {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+    
+    .address-input:focus { outline: none; border-color: #4285f4; }
+    
+    .address-suggestions {
+      background: white;
+      border: 2px solid #ddd;
+      border-top: none;
+      border-radius: 0 0 4px 4px;
+      max-height: 200px;
+      overflow-y: auto;
+      margin-bottom: 10px;
+    }
+    
+    .address-suggestion {
+      padding: 10px;
+      cursor: pointer;
+      font-size: 13px;
+      color: #333;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .address-suggestion:hover { background: #f5f5f5; }
+    .address-suggestion:last-child { border-bottom: none; }
+    
+    .confirm-btn, .next-btn, .submit-btn {
+      width: 100%;
+      padding: 12px;
+      background: #4285f4;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    
+    .confirm-btn:hover, .next-btn:hover { background: #357ae8; }
+    
+    .next-btn {
+      background: #34a853;
+      margin-top: 15px;
+    }
+    
+    .next-btn:hover { background: #2d9348; }
+    
+    .submit-btn {
+      background: #34a853;
+      font-size: 16px;
+      padding: 14px;
+    }
+    
+    .submit-btn:hover { background: #2d9348; }
+    
+    .clear-btn {
+      width: 100%;
+      padding: 10px;
+      background: white;
+      color: #666;
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    
+    .clear-btn:hover {
+      background: #f5f5f5;
+      border-color: #999;
+    }
+    
+    .instruction {
+      font-size: 13px;
+      color: #666;
+      padding: 10px;
+      background: #f5f5f5;
+      border-radius: 4px;
+      margin: 8px 0;
+    }
+    
+    .selected-info {
+      background: #e8f0fe;
+      padding: 12px;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      border-left: 4px solid #4285f4;
+    }
+    
+    .selected-info div {
+      font-size: 13px;
+      color: #333;
+      margin-bottom: 4px;
+    }
+    
+    .selected-info div:last-child { margin-bottom: 0; }
+    
+    /* Tag Mode Selector (Red/Green) */
+    .tag-mode-selector {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 15px;
+    }
+    
+    .tag-mode-btn {
+      flex: 1;
+      padding: 12px;
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: white;
+    }
+    
+    .tag-mode-btn.danger-mode {
+      color: #ea4335;
+      border-color: #ea4335;
+    }
+    
+    .tag-mode-btn.danger-mode.active {
+      background: #ea4335;
+      color: white;
+    }
+    
+    .tag-mode-btn.safe-mode {
+      color: #34a853;
+      border-color: #34a853;
+    }
+    
+    .tag-mode-btn.safe-mode.active {
+      background: #34a853;
+      color: white;
+    }
+    
+    /* Tool Selector (Cursor/Tag Can/Pressure Washer) */
+    .tool-selector-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    
+    .tool-btn {
+      flex: 1;
+      padding: 8px 4px;
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: white;
+      color: #666;
+      text-align: center;
+      line-height: 1.3;
+    }
+    
+    .tool-btn:hover { background: #f5f5f5; }
+    
+    .tool-btn.active {
+      background: #4285f4;
+      color: white;
+      border-color: #4285f4;
+    }
+    
+    .tool-emoji {
+      font-size: 20px;
+      display: block;
+      margin-bottom: 4px;
+    }
+    
+    .spray-size-control {
+      margin-bottom: 12px;
+    }
+    
+    .slider {
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: #ddd;
+      outline: none;
+    }
+    
+    .toggle-label {
+      display: block;
+      font-size: 13px;
+      color: #555;
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+    
+    .toggle-label input { margin-right: 8px; }
+    
+    .paint-target-selector {
+      padding: 10px;
+      background: #f8f9fa;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+    
+    .submit-info {
+      font-size: 13px;
+      color: #666;
+      padding: 12px;
+      background: #f8f9fa;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+    
+    .reset-btn {
+      width: 100%;
+      padding: 10px;
+      background: #666;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    
+    .reset-btn:hover { background: #555; }
+    
+    .hidden { display: none !important; }
+    
+    /* Info Panel - BOTTOM RIGHT */
+    .info-panel {
+      bottom: 20px;
+      right: 20px;
+      padding: 15px;
+      font-size: 13px;
+    }
+    
+    .info-row { margin-bottom: 5px; }
+    .info-label { font-weight: 600; color: #555; margin-right: 5px; }
+    .status { color: #4285f4; font-weight: 500; }
+    .status.loading { color: #fbbc04; }
+    
+    /* View Controls - Top Right */
+    .view-controls {
+      top: 20px;
+      right: 20px;
+      padding: 15px;
+      width: 200px;
+    }
+    
+    .view-controls h3 {
+      font-size: 14px;
+      margin-bottom: 12px;
+      color: #333;
+      font-weight: 600;
+    }
+    
+    .control-group { margin-bottom: 12px; }
+    
+    .control-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: #555;
+      margin-bottom: 6px;
+    }
+    
+    /* Cluster Items */
+    .cluster-item {
+      background: #f8f9fa;
+      padding: 12px;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      border-left: 4px solid;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .cluster-item:hover {
+      background: #e8f0fe;
+    }
+    
+    .cluster-item.selected {
+      background: #e8f0fe;
+    }
+    
+    .cluster-item.disliked.selected {
+      background: #fce8e6;
+      box-shadow: 0 0 0 3px #ea4335;
+    }
+    
+    .cluster-item.liked.selected {
+      background: #e6f4ea;
+      box-shadow: 0 0 0 3px #34a853;
+    }
+    
+    .cluster-item.disliked { border-color: #ea4335; }
+    .cluster-item.liked { border-color: #34a853; }
+    
+    .cluster-header {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #333;
+    }
+    
+    .cluster-input {
+      width: 100%;
+      padding: 8px;
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+    
+    .cluster-input:focus {
+      outline: none;
+      border-color: #4285f4;
+    }
+    
+    .cluster-save-btn {
+      padding: 6px 12px;
+      background: #4285f4;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    
+    .cluster-save-btn:hover { background: #357ae8; }
+    
+    .cluster-save-btn.saved {
+      background: #34a853;
+      pointer-events: none;
+    }
+    
+    .cluster-save-btn.saved:after {
+      content: " ✓";
+    }
+    
+    /* Welcome popup */
+    .welcome-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    }
+    
+    .welcome-popup {
+      background: white;
+      border-radius: 12px;
+      padding: 40px;
+      max-width: 600px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      text-align: center;
+    }
+    
+    .welcome-logo {
+      width: 120px;
+      height: 120px;
+      margin: 0 auto 20px;
+    }
+    
+    .welcome-title {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1a73e8;
+      margin-bottom: 20px;
+    }
+    
+    .welcome-text {
+      font-size: 16px;
+      color: #666;
+      line-height: 1.6;
+      margin-bottom: 120px;
+    }
+    
+    .welcome-buttons {
+      display: flex;
+      gap: 15px;
+      justify-content: center;
+    }
+    
+    .welcome-btn {
+      padding: 12px 30px;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+    }
+    
+    .welcome-btn.primary {
+      background: #1a73e8;
+      color: white;
+    }
+    
+    .welcome-btn.primary:hover {
+      background: #1557b0;
+    }
+    
+    .welcome-btn.secondary {
+      background: white;
+      color: #1a73e8;
+      border: 2px solid #1a73e8;
+    }
+    
+    .welcome-btn.secondary:hover {
+      background: #f0f7ff;
+    }
+    
+    /* Tag checkboxes */
+    .tag-checkboxes {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    
+    .tag-checkbox-label {
+      display: flex;
+      align-items: center;
+      padding: 8px;
+      background: #f8f9fa;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+    
+    .tag-checkbox-label:hover {
+      background: #e8f0fe;
+    }
+    
+    .tag-checkbox-label input {
+      margin-right: 8px;
+    }
+    
+    .cluster-comment {
+      width: 100%;
+      padding: 8px;
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      font-size: 12px;
+      margin-bottom: 8px;
+      resize: vertical;
+      min-height: 50px;
+      font-family: inherit;
+    }
+    
+    .cluster-comment:focus {
+      outline: none;
+      border-color: #4285f4;
+    }
+    
+    /* On-screen navigation arrows (Step 1 & 2) */
+    .map-nav-controls {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      display: none;
+      background: white;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      z-index: 100;
+    }
+    
+    .map-nav-controls.active { display: block; }
+    
+    .map-nav-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 45px);
+      grid-template-rows: repeat(3, 45px);
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    
+    .map-nav-btn {
+      background: #f5f5f5;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 18px;
+      font-weight: bold;
+      color: #555;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .map-nav-btn:hover {
+      background: #e0e0e0;
+      border-color: #999;
+      transform: scale(1.05);
+    }
+    
+    .map-nav-btn:active {
+      transform: scale(0.95);
+    }
+    
+    .map-nav-btn.active-press {
+      background: #4285f4;
+      color: white;
+      border-color: #4285f4;
+      transform: scale(0.95);
+    }
+    
+    .map-nav-btn.rotate {
+      background: #4285f4;
+      color: white;
+      border-color: #4285f4;
+      font-size: 18px;
+    }
+    
+    .map-nav-btn.rotate:hover {
+
+.map-nav-btn.zoom {
+  background: #34a853;
+  color: white;
+  border-color: #34a853;
+  font-size: 24px;
+}
+
+.map-nav-btn.zoom:hover {
+  background: #2d9348;
+}
+      background: #357ae8;
+    }
+    
+    .map-nav-label {
+      font-size: 10px;
+      color: #666;
+      text-align: center;
+      font-weight: 500;
+    }
+    
+    /* Back button */
+    .back-btn {
+      width: 100%;
+      padding: 10px;
+      background: white;
+      color: #666;
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+    }
+    
+    .back-btn:hover {
+      background: #f5f5f5;
+      border-color: #999;
+    }
+    
+    /* Step 3 detailed tagging */
+    .cluster-type-badge {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    
+    .cluster-type-badge.disliked {
+      background: #fce8e6;
+      color: #ea4335;
+      border: 2px solid #ea4335;
+    }
+    
+    .cluster-type-badge.liked {
+      background: #e6f4ea;
+      color: #34a853;
+      border: 2px solid #34a853;
+    }
+    
+    .cluster-size {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 15px;
+      font-weight: 500;
+    }
+    
+    .tag-category {
+      margin-bottom: 15px;
+      background: white;
+      border-radius: 8px;
+      border: 2px solid #e0e0e0;
+      overflow: hidden;
+    }
+    
+    .tag-category-header {
+      background: linear-gradient(to bottom, #f8f9fa, #f0f0f0);
+      padding: 10px 15px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      border-bottom: 2px solid #e0e0e0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+    }
+    
+    .tag-category-header:hover {
+      background: linear-gradient(to bottom, #f0f0f0, #e8e8e8);
+    }
+    
+    .tag-category-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .tag-category-icon {
+      font-size: 16px;
+      display: none; /* REMOVE EMOJIS */
+    }
+    
+    .tag-category-arrow {
+      font-size: 12px;
+      transition: transform 0.3s;
+    }
+    
+    .tag-category.collapsed .tag-category-arrow {
+      transform: rotate(-90deg);
+    }
+    
+    .tag-options-group {
+      padding: 10px;
+      display: block;
+    }
+    
+    .tag-category.collapsed .tag-options-group {
+      display: none;
+    }
+    
+    .tag-section-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 8px 0 6px 4px;
+    }
+    
+    .tag-section-label.positive { color: #34a853; }
+    .tag-section-label.negative { color: #ea4335; }
+    
+    .tag-option-item {
+      display: flex;
+      align-items: center;
+      padding: 8px 10px;
+      margin-bottom: 5px;
+      background: #fafafa;
+      border: 2px solid #e8e8e8;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 12px;
+      user-select: none;
+    }
+    
+    .tag-option-item:hover {
+      background: #f0f7ff;
+      border-color: #b3d9ff;
+      transform: translateX(2px);
+    }
+    
+    .tag-option-item.selected {
+      background: #e8f0fe;
+      border-color: #4285f4;
+      font-weight: 500;
+    }
+    
+    .tag-option-item.positive.selected {
+      background: #e6f4ea;
+      border-color: #34a853;
+      color: #1e7e34;
+    }
+    
+    .tag-option-item.negative.selected {
+      background: #fce8e6;
+      border-color: #ea4335;
+      color: #c5221f;
+    }
+    
+    .tag-option-checkbox {
+      width: 18px;
+      height: 18px;
+      margin-right: 10px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    
+    .tag-option-label {
+      flex: 1;
+    }
+    
+    .cluster-comment-full {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      margin: 12px 0;
+      resize: vertical;
+      min-height: 70px;
+      font-family: inherit;
+    }
+    
+    .cluster-comment-full:focus {
+      outline: none;
+      border-color: #4285f4;
+      background: #f9fbff;
+    }
+    
+    .cluster-nav-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    
+    .nav-cluster-btn {
+      padding: 10px;
+      border: 2px solid #ddd;
+      background: white;
+      color: #666;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .nav-cluster-btn:hover:not(:disabled) {
+      background: #f5f5f5;
+      border-color: #999;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .nav-cluster-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+    
+    .nav-cluster-btn.primary {
+      background: #4285f4;
+      color: white;
+      border-color: #4285f4;
+    }
+    
+    .nav-cluster-btn.primary:hover {
+      background: #357ae8;
+    }
+    
+    .nav-cluster-btn.skip {
+      color: #999;
+      border-style: dashed;
+    }
+    
+    .nav-cluster-btn.skip:hover {
+      color: #666;
+      border-color: #666;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Welcome Popup -->
+<div class="welcome-overlay" id="welcome-overlay">
+  <div class="welcome-popup">
+    <svg class="welcome-logo" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+      <!-- Université de Montréal Logo -->
+      <circle cx="60" cy="60" r="55" fill="#003366" stroke="#0099CC" stroke-width="3"/>
+      
+      <!-- Stylized "M" for Montreal -->
+      <g transform="translate(60, 60)">
+        <path d="M -25,-15 L -25,25 L -15,25 L -15,-5 L 0,15 L 15,-5 L 15,25 L 25,25 L 25,-15 L 15,-15 L 0,5 L -15,-15 Z" 
+              fill="white"/>
+      </g>
+      
+      <!-- Star accent (UdeM symbol) -->
+      <circle cx="60" cy="25" r="4" fill="#0099CC"/>
+    </svg>
+    
+    <h1 class="welcome-title">Tag ta Ville</h1>
+    
+    <p class="welcome-text">
+      Welcome! This tool allows you to map areas you like and dislike in your neighbourhood. 
+      Your feedback helps us understand urban safety and improve community spaces.
+    </p>
+    
+    <div class="welcome-buttons">
+      <button class="welcome-btn secondary" id="more-info-btn">More Info</button>
+      <button class="welcome-btn primary" id="start-btn">Start Tagging</button>
+    </div>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<!-- Main Control Panel - Top Left -->
+<div class="panel main-panel">
+  <h2>Tag ta Ville</h2>
+  
+  <!-- STEP 1: Select & Load -->
+  <div class="step-section" id="step1">
+    <div class="step-header">Step 1: Select Your Neighbourhood</div>
+    
+    <span class="step-label">Choose Method</span>
+    <div class="button-group">
+      <button class="btn active" id="btn-click">Click Map</button>
+      <button class="btn" id="btn-address">Enter Address</button>
+    </div>
+    
+    <div class="hidden" id="address-section">
+      <input 
+        type="text" 
+        class="address-input" 
+        id="address-input" 
+        placeholder="Start typing an address..."
+        autocomplete="off"
+      />
+      <div class="address-suggestions hidden" id="address-suggestions"></div>
+    </div>
+    
+    <div id="click-instruction">
+      <div class="instruction">
+        Click anywhere on the map to select your center point. You can click again to move it.
+        <div style="margin-top: 8px; font-size: 12px; color: #999;">
+          💡 Use arrow keys ← → ↑ ↓ to navigate the map
+        </div>
+      </div>
+    </div>
+    
+    <div class="hidden" id="location-selected">
+      <div class="selected-info">
+        <div><strong>Neighbourhood Selected</strong></div>
+        <div id="coords-display">Waiting...</div>
+        <div>Radius: 1 km</div>
+      </div>
+      <button class="confirm-btn" id="confirm-btn">Load My Neighbourhood</button>
+    </div>
+  </div>
+  
+  <!-- STEP 2: Paint Areas (Combined Red/Green) -->
+  <div class="step-section hidden" id="step2-paint">
+    <div class="step-header">Step 2: Tag Areas You Like or Dislike</div>
+    
+    <span class="step-label">Select Paint Color</span>
+    <div class="tag-mode-selector">
+      <button class="tag-mode-btn safe-mode active" id="paint-green">
+        Liked (Green)
+      </button>
+      <button class="tag-mode-btn danger-mode" id="paint-red">
+        Disliked (Red)
+      </button>
+    </div>
+    
+    <span class="step-label">Select Tool</span>
+    <div class="tool-selector-row">
+      <button class="tool-btn active" id="tool-cursor">
+        Cursor
+      </button>
+      <button class="tool-btn" id="tool-paint">
+        Tag Can
+      </button>
+      <button class="tool-btn" id="tool-erase">
+        Eraser
+      </button>
+    </div>
+    
+    <div id="size-controls">
+      <div class="spray-size-control">
+        <label class="control-label">
+          <span id="tool-size-label">Tool Size</span>: <span id="tool-size-value">10</span>m
+        </label>
+        <input type="range" min="2" max="20" value="10" class="slider" id="tool-size-slider" />
+      </div>
+    </div>
+    
+    <div class="paint-target-selector">
+      <label class="toggle-label">
+        <input type="checkbox" id="paint-buildings" checked />
+        Paint Buildings
+      </label>
+      <label class="toggle-label">
+        <input type="checkbox" id="paint-ground" checked />
+        Paint Ground
+      </label>
+    </div>
+    
+    <button class="clear-btn" id="clear-all-paint-btn">Clear All Paint</button>
+    
+    <button class="back-btn" id="back-from-step2">
+      ← Go Back
+    </button>
+    
+    <button class="next-btn" id="next-to-tag-clusters-btn">
+      Next: Label Tagged Areas →
+    </button>
+  </div>
+  
+  <!-- STEP 3: Tag Clusters (One at a time) -->
+  <div class="step-section hidden" id="step3-tag-clusters">
+    <div class="step-header">
+      Step 3: Area <span id="cluster-number">1</span> of <span id="cluster-total">5</span>
+    </div>
+    
+    <div class="cluster-type-badge" id="cluster-type-badge">
+      Disliked Area
+    </div>
+    
+    <div class="cluster-size" id="cluster-size">
+      97 voxels
+    </div>
+    
+    <div class="submit-info" style="margin-bottom: 20px;">
+      Select what applies (saves automatically):
+    </div>
+    
+    <div id="tag-categories-container"></div>
+    
+    <textarea 
+      class="cluster-comment-full" 
+      id="current-cluster-comment" 
+      placeholder="Additional comments (optional)..."></textarea>
+    
+    <button class="back-btn" id="back-from-step3" style="margin-top: 20px; margin-bottom: 15px;">
+      ← Go Back to Painting
+    </button>
+    
+    <div class="cluster-nav-buttons">
+      <button class="nav-cluster-btn" id="prev-cluster-btn" disabled>
+        ← Previous
+      </button>
+      <button class="nav-cluster-btn skip" id="skip-cluster-btn">
+        Skip
+      </button>
+      <button class="nav-cluster-btn primary" id="next-cluster-btn">
+        Next →
+      </button>
+    </div>
+  </div>
+  
+  <!-- STEP 4: Submit -->
+  <div class="step-section hidden" id="step4-submit">
+    <div class="step-header">Step 4: Submit Your Tags</div>
+    
+    <div class="submit-info">
+      Your tagged areas and labels will be saved for safety analysis and urban planning.
+    </div>
+    
+    <button class="submit-btn" id="submit-btn">Submit</button>
+  </div>
+  
+  <button class="reset-btn hidden" id="reset-btn">Reset & Start Over</button>
+</div>
+
+</div>
+
+<!-- View Controls - Top Right -->
+<div class="panel view-controls">
+  <h3>View Controls</h3>
+  
+  <div class="control-group">
+    <label class="control-label">
+      Viewing Angle: <span id="pitch-value">45</span>°
+    </label>
+    <input type="range" min="0" max="85" value="45" class="slider" id="pitch-slider" />
+  </div>
+  
+  <div class="control-group">
+    <label class="toggle-label">
+      <input type="checkbox" id="toggle-buildings" checked />
+      Show Buildings
+    </label>
+    <label class="toggle-label">
+      <input type="checkbox" id="toggle-trees" checked />
+      Show Trees
+    </label>
+    <label class="toggle-label">
+      <input type="checkbox" id="toggle-radius" checked />
+      Show Radius Circle
+    </label>
+    <label class="toggle-label">
+      <input type="checkbox" id="toggle-satellite" />
+      Satellite View
+    </label>
+  </div>
+</div>
+
+<!-- On-Screen Map Navigation - Visible in Step 1 & 2 -->
+<div class="map-nav-controls" id="map-nav-controls">
+  <div class="map-nav-grid">
+    <div></div>
+    <button class="map-nav-btn" id="map-nav-up" title="Pan Up">↑</button>
+    <button class="map-nav-btn rotate" id="map-rotate-left" title="Rotate Left">↶</button>
+    <button class="map-nav-btn" id="map-nav-left" title="Pan Left">←</button>
+    <button class="map-nav-btn zoom" id="map-zoom-in" title="Zoom In">+</button>
+    <button class="map-nav-btn" id="map-nav-right" title="Pan Right">→</button>
+    <button class="map-nav-btn rotate" id="map-rotate-right" title="Rotate Right">↷</button>
+    <button class="map-nav-btn" id="map-nav-down" title="Pan Down">↓</button>
+    <button class="map-nav-btn zoom" id="map-zoom-out" title="Zoom Out">−</button>
+  </div>
+  <div class="map-nav-label">Navigate, rotate & zoom</div>
+</div>
+
+<script>
+mapboxgl.accessToken = 'pk.eyJ1IjoiZXZlbHluZWJyaWUiLCJhIjoiY2themE5OGF2MDdxazJybG9oNzUyaXoxNSJ9.njPe2lcTp82DKjDeGkHaQA';
+
+const MONTREAL_CENTER = [-73.5673, 45.5017];
+const MONTREAL_GRID_ROTATION = -33;
+const RADIUS_KM = 1;
+
+let map, selectedPoint = null, selectionMode = 'click', centerMarker = null;
+let allBuildingsData = null, allTreesData = [], dataLoaded = false;
+let voxelsLoaded = false;
+let currentPaintColor = 'liked'; // 'disliked' or 'liked' - DEFAULT TO LIKED
+let currentTool = 'cursor'; // 'cursor', 'paint', 'erase'
+let toolSize = 10; // DEFAULT 10M
+let paintBuildings = true;
+let paintGround = true;
+let groundPaintMarkers = [];
+let dislikedVoxels = new Set();
+let likedVoxels = new Set();
+let allVoxelFeatures = [];
+let voxelSpatialIndex = null;
+let isDragging = false;
+let clusterLabels = {};
+let clusterMarkers = [];
+let selectedClusterId = null;
+let lastPaintTime = 0;
+let paintQueue = [];
+let updateScheduled = false;
+let currentClusterIndex = 0;
+let allClusters = [];
+
+// Tag options for Step 3
+const TAG_OPTIONS = {
+  "Safety": {
+    positive: [
+      "Well-lit streets",
+      "Clear sightlines",
+      "Active surveillance", 
+      "Safe pedestrian crossings",
+      "Emergency services nearby"
+    ],
+    negative: [
+      "Insufficient lighting",
+      "Hidden spots/corners",
+      "Isolated area",
+      "Dangerous crossings",
+      "No police presence"
+    ]
+  },
+  "Cleanliness": {
+    positive: [
+      "Well-maintained infrastructure",
+      "Clean sidewalks/streets",
+      "Green spaces present",
+      "Regular upkeep visible",
+      "No litter"
+    ],
+    negative: [
+      "Litter/garbage present",
+      "Poor maintenance",
+      "Graffiti/vandalism",
+      "Neglected public spaces",
+      "Dirty/unkempt streets"
+    ]
+  },
+  "Atmosphere": {
+    positive: [
+      "Welcoming environment",
+      "Active community life",
+      "Pleasant ambiance",
+      "Good pedestrian activity",
+      "Cultural vitality"
+    ],
+    negative: [
+      "Unwelcoming feel",
+      "Deserted/empty",
+      "Uncomfortable atmosphere",
+      "Excessive noise",
+      "Intimidating presence"
+    ]
+  },
+  "Services": {
+    positive: [
+      "Good public transit access",
+      "Bike infrastructure present",
+      "Amenities nearby",
+      "Parking available",
+      "Clear wayfinding/signage"
+    ],
+    negative: [
+      "Poor transit connections",
+      "No bike infrastructure",
+      "Missing basic amenities",
+      "Traffic congestion",
+      "Confusing layout"
+    ]
+  }
+};
+
+// Welcome popup handlers
+document.getElementById('start-btn').addEventListener('click', () => {
+  document.getElementById('welcome-overlay').style.display = 'none';
+  // Show map navigation controls
+  document.getElementById('map-nav-controls').classList.add('active');
+});
+
+document.getElementById('more-info-btn').addEventListener('click', () => {
+  window.open('https://evelynebrie.com', '_blank');
+});
+
+// Map navigation controls
+const MAP_PAN_DISTANCE = 100;
+const MAP_ROTATE_ANGLE = 15;
+
+document.getElementById('map-nav-up').addEventListener('click', () => {
+  map.panBy([0, -MAP_PAN_DISTANCE]);
+});
+
+document.getElementById('map-nav-down').addEventListener('click', () => {
+  map.panBy([0, MAP_PAN_DISTANCE]);
+});
+
+document.getElementById('map-nav-left').addEventListener('click', () => {
+  map.panBy([-MAP_PAN_DISTANCE, 0]);
+});
+
+document.getElementById('map-nav-right').addEventListener('click', () => {
+  map.panBy([MAP_PAN_DISTANCE, 0]);
+});
+
+document.getElementById('map-rotate-left').addEventListener('click', () => {
+  const current = map.getBearing();
+  map.easeTo({ bearing: current - MAP_ROTATE_ANGLE, duration: 300 });
+});
+
+document.getElementById('map-rotate-right').addEventListener('click', () => {
+  const current = map.getBearing();
+  map.easeTo({ bearing: current + MAP_ROTATE_ANGLE, duration: 300 });
+});
+
+// Zoom controls
+document.getElementById('map-zoom-in').addEventListener('click', () => {
+  map.zoomIn({ duration: 300 });
+});
+
+document.getElementById('map-zoom-out').addEventListener('click', () => {
+  map.zoomOut({ duration: 300 });
+});
+
+// Keyboard navigation with live visual feedback
+document.addEventListener('keydown', (e) => {
+  // Only respond to arrow keys when not typing in an input
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  
+  let buttonId = null;
+  
+  switch(e.key) {
+    case 'ArrowUp':
+      e.preventDefault();
+      map.panBy([0, -MAP_PAN_DISTANCE]);
+      buttonId = 'map-nav-up';
+      break;
+    case 'ArrowDown':
+      e.preventDefault();
+      map.panBy([0, MAP_PAN_DISTANCE]);
+      buttonId = 'map-nav-down';
+      break;
+    case 'ArrowLeft':
+      e.preventDefault();
+      map.panBy([-MAP_PAN_DISTANCE, 0]);
+      buttonId = 'map-nav-left';
+      break;
+    case 'ArrowRight':
+      e.preventDefault();
+      map.panBy([MAP_PAN_DISTANCE, 0]);
+      buttonId = 'map-nav-right';
+      break;
+  }
+  
+  // Highlight the button
+  if (buttonId) {
+    const button = document.getElementById(buttonId);
+    if (button) {
+      button.classList.add('active-press');
+    }
+  }
+});
+
+document.addEventListener('keyup', (e) => {
+  // Remove highlight when key is released
+  const keyMap = {
+    'ArrowUp': 'map-nav-up',
+    'ArrowDown': 'map-nav-down',
+    'ArrowLeft': 'map-nav-left',
+    'ArrowRight': 'map-nav-right'
+  };
+  
+  const buttonId = keyMap[e.key];
+  if (buttonId) {
+    const button = document.getElementById(buttonId);
+    if (button) {
+      button.classList.remove('active-press');
+    }
+  }
+});
+
+// Initialize map
+map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/mapbox/light-v11',
+  center: MONTREAL_CENTER,
+  zoom: 12,
+  pitch: 45,
+  bearing: -17
+});
+
+map.on('load', () => {
+  console.log('Map loaded');
+  loadAllData();
+});
+
+// Update pitch value live
+map.on('pitch', () => {
+  const currentPitch = Math.round(map.getPitch());
+  document.getElementById('pitch-value').textContent = currentPitch;
+  document.getElementById('pitch-slider').value = currentPitch;
+});
+
+// Load all data
+async function loadAllData() {
+  console.log('Starting data load...');
+  
+  try {
+    const response = await fetch('./tiles/tile_manifest.json');
+    const manifest = await response.json();
+    
+    const tilePromises = manifest.tiles.map(async (tile) => {
+      const resp = await fetch(`./tiles/${tile.file}`);
+      const blob = await resp.blob();
+      const buffer = await blob.arrayBuffer();
+      const decompressed = pako.ungzip(new Uint8Array(buffer), { to: 'string' });
+      return JSON.parse(decompressed).features;
+    });
+    
+    const allTiles = await Promise.all(tilePromises);
+    allBuildingsData = allTiles.flat();
+    console.log(`✓ Loaded ${allBuildingsData.length} buildings`);
+  } catch (error) {
+    console.error('Error loading buildings:', error);
+    alert('Error loading building data. Please refresh the page.');
+    return;
+  }
+  
+  const treeFiles = ['arbres-part-aa.csv', 'arbres-part-ab.csv', 'arbres-part-ac.csv',
+                     'arbres-part-ad.csv', 'arbres-part-ae.csv', 'arbres-part-af.csv', 'arbres-part-ag.csv'];
+  
+  let loaded = 0;
+  let hasError = false;
+  
+  treeFiles.forEach(file => {
+    Papa.parse(file, {
+      download: true,
+      header: true,
+      complete: (r) => {
+        allTreesData = allTreesData.concat(r.data);
+        loaded++;
+        if (loaded === treeFiles.length) {
+          console.log(`✓ Loaded ${allTreesData.length} trees`);
+          dataLoaded = true;
+          console.log('✓ All data loaded successfully');
+        }
+      },
+      error: (e) => { 
+        console.error(`Error loading ${file}:`, e);
+        loaded++;
+        hasError = true;
+        if (loaded === treeFiles.length) {
+          if (hasError) {
+            console.warn('Some tree files failed to load, but continuing...');
+          }
+          dataLoaded = true;
+          console.log('✓ Data loading complete (with some errors)');
+        }
+      }
+    });
+  });
+  
+  // Timeout fallback - mark as loaded after 5 seconds even if trees fail
+  setTimeout(() => {
+    if (!dataLoaded) {
+      console.warn('Data loading timeout - marking as loaded');
+      dataLoaded = true;
+    }
+  }, 5000);
+}
+
+// Mode selection
+document.getElementById('btn-click').addEventListener('click', () => {
+  selectionMode = 'click';
+  document.getElementById('btn-click').classList.add('active');
+  document.getElementById('btn-address').classList.remove('active');
+  document.getElementById('address-section').classList.add('hidden');
+});
+
+document.getElementById('btn-address').addEventListener('click', () => {
+  selectionMode = 'address';
+  document.getElementById('btn-address').classList.add('active');
+  document.getElementById('btn-click').classList.remove('active');
+  document.getElementById('address-section').classList.remove('hidden');
+  document.getElementById('address-input').focus();
+});
+
+// Address autocomplete
+let addressTimeout;
+document.getElementById('address-input').addEventListener('input', (e) => {
+  const query = e.target.value.trim();
+  
+  if (query.length < 3) {
+    document.getElementById('address-suggestions').classList.add('hidden');
+    return;
+  }
+  
+  clearTimeout(addressTimeout);
+  addressTimeout = setTimeout(() => {
+    searchAddresses(query);
+  }, 300);
+});
+
+async function searchAddresses(query) {
+  const searchText = query.includes('Montreal') ? query : `${query}, Montreal, Quebec`;
+  const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(searchText)}.json?access_token=${mapboxgl.accessToken}&bbox=-73.98,45.40,-73.48,45.70&limit=5`;
+  
+  try {
+    const resp = await fetch(url);
+    const data = await resp.json();
+    
+    if (data.features && data.features.length > 0) {
+      const suggestionsDiv = document.getElementById('address-suggestions');
+      suggestionsDiv.innerHTML = '';
+      
+      data.features.forEach(feature => {
+        const div = document.createElement('div');
+        div.className = 'address-suggestion';
+        div.textContent = feature.place_name;
+        div.addEventListener('click', () => {
+          const [lng, lat] = feature.center;
+          document.getElementById('address-input').value = feature.place_name;
+          suggestionsDiv.classList.add('hidden');
+          selectPoint({ lng, lat });
+          map.flyTo({ center: [lng, lat], zoom: 16, duration: 1500 });
+        });
+        suggestionsDiv.appendChild(div);
+      });
+      
+      suggestionsDiv.classList.remove('hidden');
+    }
+  } catch (error) {
+    console.error('Geocoding error:', error);
+  }
+}
+
+// Mouse handlers
+map.on('mousedown', (e) => {
+  // Step 1: Click to select/move point
+  if (!voxelsLoaded && selectionMode === 'click') {
+    selectPoint(e.lngLat);
+    return;
+  }
+  
+  // Step 2: Paint or erase
+  if (voxelsLoaded && currentTool !== 'cursor') {
+    isDragging = true;
+    performAction([e.lngLat.lng, e.lngLat.lat]);
+  }
+});
+
+map.on('mouseup', () => {
+  isDragging = false;
+});
+
+map.on('mouseleave', () => {
+  isDragging = false;
+});
+
+map.on('mousemove', (e) => {
+  if (currentTool !== 'cursor' && voxelsLoaded && map.getSource('tool-preview')) {
+    const radiusKm = toolSize / 1000;
+    const circle = turf.circle([e.lngLat.lng, e.lngLat.lat], radiusKm, {
+      steps: 32,
+      units: 'kilometers'
+    });
+    
+    map.getSource('tool-preview').setData(circle);
+    
+    let color = currentTool === 'erase' ? '#666666' : 
+                currentPaintColor === 'disliked' ? '#ff0000' : '#00ff00';
+    
+    map.setPaintProperty('tool-preview-fill', 'fill-color', color);
+    map.setPaintProperty('tool-preview-line', 'line-color', color);
+    
+    // Throttle painting during drag - only paint every 80ms for smoother performance
+    if (isDragging) {
+      const now = Date.now();
+      if (now - lastPaintTime > 80) { // Increased from 50ms to 80ms
+        lastPaintTime = now;
+        performAction([e.lngLat.lng, e.lngLat.lat]);
+      }
+    }
+  }
+});
+
+function selectPoint(lngLat) {
+  selectedPoint = lngLat;
+  
+  if (centerMarker) centerMarker.remove();
+  
+  const el = document.createElement('div');
+  el.style.width = '20px';
+  el.style.height = '20px';
+  el.style.backgroundColor = '#4285f4';
+  el.style.borderRadius = '50%';
+  el.style.border = '3px solid white';
+  el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+  
+  centerMarker = new mapboxgl.Marker({ element: el })
+    .setLngLat([lngLat.lng, lngLat.lat])
+    .addTo(map);
+  
+  drawRadiusCircle(lngLat);
+  
+  document.getElementById('coords-display').textContent = 
+    `Lat: ${lngLat.lat.toFixed(4)}, Lng: ${lngLat.lng.toFixed(4)}`;
+  
+  document.getElementById('click-instruction').classList.add('hidden');
+  document.getElementById('location-selected').classList.remove('hidden');
+  
+}
+
+function drawRadiusCircle(center) {
+  const circle = turf.circle([center.lng, center.lat], RADIUS_KM, { steps: 64, units: 'kilometers' });
+  
+  if (map.getSource('radius-circle')) {
+    map.getSource('radius-circle').setData(circle);
+  } else {
+    map.addSource('radius-circle', { type: 'geojson', data: circle });
+    
+    map.addLayer({
+      id: 'radius-circle-fill',
+      type: 'fill',
+      source: 'radius-circle',
+      paint: { 'fill-color': '#4285f4', 'fill-opacity': 0.1 }
+    });
+    
+    map.addLayer({
+      id: 'radius-circle-line',
+      type: 'line',
+      source: 'radius-circle',
+      paint: { 'line-color': '#4285f4', 'line-width': 3, 'line-dasharray': [2, 2] }
+    });
+  }
+}
+
+document.getElementById('confirm-btn').addEventListener('click', () => {
+  console.log('Confirm button clicked');
+  console.log('selectedPoint:', selectedPoint);
+  console.log('dataLoaded:', dataLoaded);
+  
+  if (!selectedPoint) {
+    alert('Please select a point on the map first.');
+    return;
+  }
+  
+  if (!dataLoaded) {
+    alert('Data is still loading. Please wait a moment and try again.\n\nCheck the browser console for loading status.');
+    return;
+  }
+  
+  console.log('Loading voxels...');
+  document.getElementById('step1').classList.add('hidden');
+  document.getElementById('step2-paint').classList.remove('hidden');
+  document.getElementById('reset-btn').classList.remove('hidden');
+  
+  loadVoxelsAndTrees(selectedPoint);
+});
+
+// Back button handlers
+document.getElementById('back-from-step2').addEventListener('click', () => {
+  if (confirm('Go back? This will clear all your painted areas.')) {
+    // Clear paint
+    dislikedVoxels.clear();
+    likedVoxels.clear();
+    
+    allVoxelFeatures.forEach(voxel => {
+      if (voxel.properties.tagged) {
+        voxel.properties.color = voxel.properties.originalColor;
+        delete voxel.properties.tagged;
+        delete voxel.properties.tagType;
+      }
+    });
+    
+    updateVoxelColors();
+    
+    groundPaintMarkers.forEach(paintId => {
+      if (map.getLayer(paintId)) {
+        map.removeLayer(paintId);
+        map.removeSource(paintId);
+      }
+    });
+    groundPaintMarkers = [];
+    
+    // Reset to cursor tool
+    if (currentTool !== 'cursor') {
+      document.getElementById('tool-cursor').click();
+    }
+    
+    document.getElementById('step2-paint').classList.add('hidden');
+    document.getElementById('step1').classList.remove('hidden');
+  }
+});
+
+document.getElementById('back-from-step3').addEventListener('click', () => {
+  document.getElementById('step3-tag-clusters').classList.add('hidden');
+  document.getElementById('step2-paint').classList.remove('hidden');
+  
+  // Remove cluster markers
+  clusterMarkers.forEach(marker => marker.remove());
+  clusterMarkers = [];
+});
+
+async function loadVoxelsAndTrees(center) {
+  
+  const buildingsInRadius = allBuildingsData.filter(b => {
+    try {
+      const c = turf.center(b);
+      const d = turf.distance([center.lng, center.lat], c.geometry.coordinates, { units: 'kilometers' });
+      return d <= RADIUS_KM;
+    } catch (e) { return false; }
+  });
+  
+  console.log(`Buildings in radius: ${buildingsInRadius.length}`);
+  
+  setTimeout(() => {
+    processVoxels(buildingsInRadius, center);
+    processTreesInRadius(center);
+  }, 100);
+}
+
+function processVoxels(buildings, center) {
+  const CUBE_SIZE = 5, centerLat = center.lat;
+  const metersPerDegreeLat = 111320;
+  const metersPerDegreeLon = 111320 * Math.cos(centerLat * Math.PI / 180);
+  const cubeSizeDegLat = CUBE_SIZE / metersPerDegreeLat;
+  const cubeSizeDegLon = CUBE_SIZE / metersPerDegreeLon;
+  const rotationRad = (MONTREAL_GRID_ROTATION * Math.PI) / 180;
+  
+  const allCubes = [];
+  
+  buildings.forEach(building => {
+    const height = building.properties?.height || 10;
+    const geometry = building.geometry;
+    if (!geometry) return;
+    
+    try {
+      let poly = geometry.type === 'Polygon' ? turf.polygon(geometry.coordinates) : turf.polygon(geometry.coordinates[0]);
+      
+      const bbox = turf.bbox(poly);
+      const [minLon, minLat, maxLon, maxLat] = bbox;
+      const centerLon = (minLon + maxLon) / 2, centerLat = (minLat + maxLat) / 2;
+      const numLayers = Math.ceil(height / CUBE_SIZE);
+      
+      for (let layer = 0; layer < numLayers; layer++) {
+        const baseHeight = layer * CUBE_SIZE;
+        const topHeight = Math.min((layer + 1) * CUBE_SIZE, height);
+        
+        let color = baseHeight < 25 ? '#90a4ae' : baseHeight < 50 ? '#78909c' : 
+                    baseHeight < 75 ? '#607d8b' : baseHeight < 100 ? '#546e7a' : '#455a64';
+        
+        for (let lat = minLat; lat <= maxLat; lat += cubeSizeDegLat) {
+          for (let lon = minLon; lon <= maxLon; lon += cubeSizeDegLon) {
+            const gap = 0.05, gapLat = cubeSizeDegLat * gap, gapLon = cubeSizeDegLon * gap;
+            
+            const localLon = lon - centerLon, localLat = lat - centerLat;
+            const rotatedLon = localLon * Math.cos(rotationRad) - localLat * Math.sin(rotationRad);
+            const rotatedLat = localLon * Math.sin(rotationRad) + localLat * Math.cos(rotationRad);
+            const finalLon = rotatedLon + centerLon, finalLat = rotatedLat + centerLat;
+            
+            const cubeSquare = turf.polygon([[
+              [finalLon + gapLon, finalLat + gapLat],
+              [finalLon + cubeSizeDegLon - gapLon, finalLat + gapLat],
+              [finalLon + cubeSizeDegLon - gapLon, finalLat + cubeSizeDegLat - gapLat],
+              [finalLon + gapLon, finalLat + cubeSizeDegLat - gapLat],
+              [finalLon + gapLon, finalLat + gapLat]
+            ]]);
+            
+            try {
+              if (turf.booleanIntersects(cubeSquare, poly)) {
+                allCubes.push({
+                  type: 'Feature',
+                  properties: { height: topHeight, base: baseHeight + 0.2, color: color, originalColor: color },
+                  geometry: cubeSquare.geometry
+                });
+              }
+            } catch (e) {}
+          }
+        }
+      }
+    } catch (e) {}
+  });
+  
+  console.log(`Generated ${allCubes.length} voxels`);
+  
+  allVoxelFeatures = allCubes;
+  voxelsLoaded = true;
+  buildSpatialIndex();
+  
+  if (map.getSource('voxel-cubes')) {
+    map.getSource('voxel-cubes').setData({ type: 'FeatureCollection', features: allCubes });
+  } else {
+    map.addSource('voxel-cubes', { type: 'geojson', data: { type: 'FeatureCollection', features: allCubes }});
+    map.addLayer({
+      id: 'voxel-fill',
+      type: 'fill-extrusion',
+      source: 'voxel-cubes',
+      paint: {
+        'fill-extrusion-color': ['get', 'color'],
+        'fill-extrusion-height': ['get', 'height'],
+        'fill-extrusion-base': ['get', 'base'],
+        'fill-extrusion-opacity': 0.9,
+        'fill-extrusion-vertical-gradient': true
+      }
+    });
+  }
+  
+  if (map.getLayer('building')) map.setLayoutProperty('building', 'visibility', 'none');
+}
+
+function buildSpatialIndex() {
+  voxelSpatialIndex = new Map();
+  const gridSize = 0.001;
+  
+  allVoxelFeatures.forEach((voxel, index) => {
+    try {
+      const center = turf.center(voxel);
+      const [lon, lat] = center.geometry.coordinates;
+      const gridX = Math.floor(lon / gridSize);
+      const gridY = Math.floor(lat / gridSize);
+      const key = `${gridX},${gridY}`;
+      
+      if (!voxelSpatialIndex.has(key)) {
+        voxelSpatialIndex.set(key, []);
+      }
+      voxelSpatialIndex.get(key).push(index);
+    } catch (e) {}
+  });
+  
+  console.log(`Spatial index: ${voxelSpatialIndex.size} cells`);
+}
+
+function processTreesInRadius(center) {
+  const treeCubes = [];
+  
+  allTreesData.forEach(tree => {
+    const lon = parseFloat(tree.Longitude), lat = parseFloat(tree.Latitude);
+    if (isNaN(lon) || isNaN(lat)) return;
+    
+    const d = turf.distance([center.lng, center.lat], [lon, lat], { units: 'kilometers' });
+    if (d > RADIUS_KM) return;
+    
+    const height = parseFloat(tree.Hauteur_totale) || 8;
+    const TREE_SIZE = 3;
+    const metersPerDegreeLat = 111320;
+    const metersPerDegreeLon = 111320 * Math.cos(lat * Math.PI / 180);
+    const treeSizeDegLat = TREE_SIZE / metersPerDegreeLat;
+    const treeSizeDegLon = TREE_SIZE / metersPerDegreeLon;
+    
+    treeCubes.push({
+      type: 'Feature',
+      properties: { height: height, base: 0, color: '#66bb6a' },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [[
+          [lon - treeSizeDegLon/2, lat - treeSizeDegLat/2],
+          [lon + treeSizeDegLon/2, lat - treeSizeDegLat/2],
+          [lon + treeSizeDegLon/2, lat + treeSizeDegLat/2],
+          [lon - treeSizeDegLon/2, lat + treeSizeDegLat/2],
+          [lon - treeSizeDegLon/2, lat - treeSizeDegLat/2]
+        ]]
+      }
+    });
+  });
+  
+  console.log(`Generated ${treeCubes.length} trees`);
+  
+  if (map.getSource('tree-cubes')) {
+    map.getSource('tree-cubes').setData({ type: 'FeatureCollection', features: treeCubes });
+  } else if (treeCubes.length > 0) {
+    map.addSource('tree-cubes', { type: 'geojson', data: { type: 'FeatureCollection', features: treeCubes }});
+    map.addLayer({
+      id: 'tree-cubes',
+      type: 'fill-extrusion',
+      source: 'tree-cubes',
+      paint: {
+        'fill-extrusion-color': ['get', 'color'],
+        'fill-extrusion-height': ['get', 'height'],
+        'fill-extrusion-base': ['get', 'base'],
+        'fill-extrusion-opacity': 0.8,
+        'fill-extrusion-vertical-gradient': true
+      }
+    });
+  }
+}
+
+// Paint color selection
+document.getElementById('paint-red').addEventListener('click', () => {
+  currentPaintColor = 'disliked';
+  document.getElementById('paint-red').classList.add('active');
+  document.getElementById('paint-green').classList.remove('active');
+  
+  // Update preview color if tool is active
+  if (currentTool === 'paint' && map.getSource('tool-preview')) {
+    // Force preview update
+    map.getCanvas().dispatchEvent(new MouseEvent('mousemove'));
+  }
+});
+
+document.getElementById('paint-green').addEventListener('click', () => {
+  currentPaintColor = 'liked';
+  document.getElementById('paint-green').classList.add('active');
+  document.getElementById('paint-red').classList.remove('active');
+  
+  // Update preview color if tool is active
+  if (currentTool === 'paint' && map.getSource('tool-preview')) {
+    // Force preview update
+    map.getCanvas().dispatchEvent(new MouseEvent('mousemove'));
+  }
+});
+
+// Tool selection
+document.getElementById('tool-cursor').addEventListener('click', () => {
+  currentTool = 'cursor';
+  document.getElementById('tool-cursor').classList.add('active');
+  document.getElementById('tool-paint').classList.remove('active');
+  document.getElementById('tool-erase').classList.remove('active');
+  map.getCanvas().style.cursor = '';
+  map.dragPan.enable();
+  map.scrollZoom.enable();
+  map.doubleClickZoom.enable();
+  removeToolPreview();
+});
+
+document.getElementById('tool-paint').addEventListener('click', () => {
+  currentTool = 'paint';
+  document.getElementById('tool-paint').classList.add('active');
+  document.getElementById('tool-cursor').classList.remove('active');
+  document.getElementById('tool-erase').classList.remove('active');
+  map.getCanvas().style.cursor = 'crosshair';
+  map.dragPan.disable();
+  map.scrollZoom.enable(); // KEEP ZOOM ENABLED
+  map.doubleClickZoom.enable(); // KEEP DOUBLE-CLICK ZOOM
+  createToolPreview();
+  document.getElementById('tool-size-label').textContent = 'Brush Size';
+});
+
+document.getElementById('tool-erase').addEventListener('click', () => {
+  currentTool = 'erase';
+  document.getElementById('tool-erase').classList.add('active');
+  document.getElementById('tool-cursor').classList.remove('active');
+  document.getElementById('tool-paint').classList.remove('active');
+  map.getCanvas().style.cursor = 'crosshair';
+  map.dragPan.disable();
+  map.scrollZoom.enable(); // KEEP ZOOM ENABLED
+  map.doubleClickZoom.enable(); // KEEP DOUBLE-CLICK ZOOM
+  createToolPreview();
+  document.getElementById('tool-size-label').textContent = 'Eraser Size';
+});
+
+// Tool size
+document.getElementById('tool-size-slider').addEventListener('input', (e) => {
+  toolSize = parseInt(e.target.value);
+  document.getElementById('tool-size-value').textContent = toolSize;
+});
+
+// Paint targets
+document.getElementById('paint-buildings').addEventListener('change', (e) => {
+  paintBuildings = e.target.checked;
+});
+
+document.getElementById('paint-ground').addEventListener('change', (e) => {
+  paintGround = e.target.checked;
+});
+
+function createToolPreview() {
+  if (!map.getSource('tool-preview')) {
+    map.addSource('tool-preview', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] }
+    });
+    
+    map.addLayer({
+      id: 'tool-preview-fill',
+      type: 'fill',
+      source: 'tool-preview',
+      paint: { 'fill-color': '#ff0000', 'fill-opacity': 0.15 }
+    });
+    
+    map.addLayer({
+      id: 'tool-preview-line',
+      type: 'line',
+      source: 'tool-preview',
+      paint: { 'line-color': '#ff0000', 'line-width': 2, 'line-dasharray': [3, 3] }
+    });
+  }
+}
+
+function removeToolPreview() {
+  if (map.getLayer('tool-preview-fill')) {
+    map.removeLayer('tool-preview-fill');
+    map.removeLayer('tool-preview-line');
+    map.removeSource('tool-preview');
+  }
+}
+
+function performAction(clickPoint) {
+  if (currentTool === 'erase') {
+    eraseAtPoint(clickPoint, toolSize);
+  } else if (currentTool === 'paint') {
+    const currentColor = currentPaintColor === 'disliked' ? '#ff0000' : '#00ff00';
+    
+    if (paintGround) {
+      paintGroundCircle(clickPoint, toolSize, currentColor, currentPaintColor);
+    }
+    
+    if (paintBuildings && voxelSpatialIndex) {
+      const paintedIndices = fastSprayPaint(clickPoint, toolSize, currentColor, currentPaintColor);
+      if (paintedIndices.length > 0) {
+        // OPTIMIZED: Only update painted voxels
+        updatePaintedVoxels(paintedIndices);
+      }
+    }
+  }
+}
+
+// OPTIMIZED: Update only specific voxels that were painted
+function updatePaintedVoxels(indices) {
+  if (!map.getSource('voxel-cubes')) return;
+  
+  const source = map.getSource('voxel-cubes');
+  const currentData = source._data;
+  
+  if (currentData && currentData.features) {
+    indices.forEach(idx => {
+      if (currentData.features[idx] && allVoxelFeatures[idx]) {
+        currentData.features[idx].properties.color = allVoxelFeatures[idx].properties.color;
+        currentData.features[idx].properties.tagged = allVoxelFeatures[idx].properties.tagged;
+        currentData.features[idx].properties.tagType = allVoxelFeatures[idx].properties.tagType;
+      }
+    });
+    
+    // Much faster update - only changes painted voxels
+    source.setData(currentData);
+  }
+}
+
+function fastSprayPaint(clickPoint, radiusMeters, color, type) {
+  const gridSize = 0.001;
+  const radiusDeg = radiusMeters / 111320;
+  const [clickLon, clickLat] = clickPoint;
+  
+  const gridRadius = Math.ceil(radiusDeg / gridSize);
+  const centerGridX = Math.floor(clickLon / gridSize);
+  const centerGridY = Math.floor(clickLat / gridSize);
+  
+  const paintedIndices = []; // Return indices instead of count
+  const targetSet = type === 'disliked' ? dislikedVoxels : likedVoxels;
+  const radiusDegSquared = radiusDeg * radiusDeg;
+  
+  for (let dx = -gridRadius; dx <= gridRadius; dx++) {
+    for (let dy = -gridRadius; dy <= gridRadius; dy++) {
+      const key = `${centerGridX + dx},${centerGridY + dy}`;
+      const indices = voxelSpatialIndex.get(key);
+      
+      if (indices) {
+        indices.forEach(index => {
+          const voxel = allVoxelFeatures[index];
+          try {
+            if (!voxel._center) {
+              const center = turf.center(voxel);
+              voxel._center = center.geometry.coordinates;
+            }
+            
+            const dx = clickPoint[0] - voxel._center[0];
+            const dy = clickPoint[1] - voxel._center[1];
+            const distSquared = dx * dx + dy * dy;
+            
+            if (distSquared < radiusDegSquared) {
+              voxel.properties.color = color;
+              voxel.properties.tagged = true;
+              voxel.properties.tagType = type;
+              targetSet.add(index);
+              paintedIndices.push(index); // Collect painted indices
+            }
+          } catch (e) {}
+        });
+      }
+    }
+  }
+  
+  return paintedIndices;
+}
+
+function paintGroundCircle(center, radiusMeters, color, type) {
+  const radiusKm = radiusMeters / 1000;
+  const circle = turf.circle(center, radiusKm, { steps: 16, units: 'kilometers' }); // Reduced steps from 32 to 16
+  
+  const paintId = `ground-paint-${groundPaintMarkers.length}`;
+  circle.properties = { color: color, type: type };
+  
+  map.addSource(paintId, {
+    type: 'geojson',
+    data: circle
+  });
+  
+  map.addLayer({
+    id: paintId,
+    type: 'fill',
+    source: paintId,
+    paint: {
+      'fill-color': color,
+      'fill-opacity': 0.4
+    }
+  }, 'voxel-fill');
+  
+  groundPaintMarkers.push(paintId);
+  
+  // Limit total ground markers to prevent performance issues
+  if (groundPaintMarkers.length > 500) {
+    const oldestId = groundPaintMarkers.shift();
+    if (map.getLayer(oldestId)) {
+      map.removeLayer(oldestId);
+      map.removeSource(oldestId);
+    }
+  }
+}
+
+function eraseAtPoint(clickPoint, radiusMeters) {
+  const radiusKm = radiusMeters / 1000;
+  
+  if (paintGround) {
+    groundPaintMarkers = groundPaintMarkers.filter(paintId => {
+      try {
+        const source = map.getSource(paintId);
+        if (source && source._data && source._data.geometry) {
+          const eraseCircle = turf.circle(clickPoint, radiusKm, { units: 'kilometers' });
+          const overlaps = turf.booleanOverlap(source._data, eraseCircle) || 
+                         turf.booleanContains(eraseCircle, source._data) ||
+                         turf.booleanWithin(source._data, eraseCircle);
+          
+          if (overlaps) {
+            if (map.getLayer(paintId)) {
+              map.removeLayer(paintId);
+              map.removeSource(paintId);
+            }
+            return false;
+          }
+        }
+      } catch (e) {}
+      return true;
+    });
+  }
+  
+  if (paintBuildings && voxelSpatialIndex) {
+    const gridSize = 0.001;
+    const radiusDeg = radiusMeters / 111320;
+    const [clickLon, clickLat] = clickPoint;
+    
+    const gridRadius = Math.ceil(radiusDeg / gridSize);
+    const centerGridX = Math.floor(clickLon / gridSize);
+    const centerGridY = Math.floor(clickLat / gridSize);
+    
+    let erasedCount = 0;
+    
+    for (let dx = -gridRadius; dx <= gridRadius; dx++) {
+      for (let dy = -gridRadius; dy <= gridRadius; dy++) {
+        const key = `${centerGridX + dx},${centerGridY + dy}`;
+        const indices = voxelSpatialIndex.get(key);
+        
+        if (indices) {
+          indices.forEach(index => {
+            const voxel = allVoxelFeatures[index];
+            if (voxel.properties.tagged) {
+              try {
+                const center = turf.center(voxel);
+                const dist = turf.distance(clickPoint, center.geometry.coordinates, {units: 'degrees'});
+                
+                if (dist < radiusDeg) {
+                  voxel.properties.color = voxel.properties.originalColor;
+                  delete voxel.properties.tagged;
+                  delete voxel.properties.tagType;
+                  dislikedVoxels.delete(index);
+                  likedVoxels.delete(index);
+                  erasedCount++;
+                }
+              } catch (e) {}
+            }
+          });
+        }
+      }
+    }
+    
+    if (erasedCount > 0) {
+      updateVoxelColors();
+    }
+  }
+}
+
+function updateVoxelColors() {
+  // OPTIMIZED: Update colors directly in the existing data without reloading
+  // This prevents voxels from disappearing and is much faster
+  if (map.getSource('voxel-cubes')) {
+    const source = map.getSource('voxel-cubes');
+    const currentData = source._data;
+    
+    // Update colors in place
+    if (currentData && currentData.features) {
+      currentData.features.forEach((feature, idx) => {
+        if (allVoxelFeatures[idx]) {
+          feature.properties.color = allVoxelFeatures[idx].properties.color;
+          feature.properties.tagged = allVoxelFeatures[idx].properties.tagged;
+          feature.properties.tagType = allVoxelFeatures[idx].properties.tagType;
+        }
+      });
+    }
+    
+    // Trigger re-render without full data reload
+    source.setData(currentData);
+  }
+}
+
+// Clear all paint
+document.getElementById('clear-all-paint-btn').addEventListener('click', () => {
+  if (confirm('Clear all paint?')) {
+    dislikedVoxels.clear();
+    likedVoxels.clear();
+    
+    allVoxelFeatures.forEach(voxel => {
+      if (voxel.properties.tagged) {
+        voxel.properties.color = voxel.properties.originalColor;
+        delete voxel.properties.tagged;
+        delete voxel.properties.tagType;
+      }
+    });
+    
+    updateVoxelColors();
+    
+    groundPaintMarkers.forEach(paintId => {
+      if (map.getLayer(paintId)) {
+        map.removeLayer(paintId);
+        map.removeSource(paintId);
+      }
+    });
+    groundPaintMarkers = [];
+  }
+});
+
+// Next to cluster tagging
+document.getElementById('next-to-tag-clusters-btn').addEventListener('click', () => {
+  document.getElementById('step2-paint').classList.add('hidden');
+  document.getElementById('step3-tag-clusters').classList.remove('hidden');
+  
+  // Reset tool to cursor
+  if (currentTool !== 'cursor') {
+    document.getElementById('tool-cursor').click();
+  }
+  
+  detectAndDisplayClusters();
+});
+
+// Improved cluster detection with 20m buffer using DBSCAN-like approach
+function detectAndDisplayClusters() {
+  const CLUSTER_DISTANCE_KM = 0.02;
+  
+  console.log('Starting cluster detection...');
+  
+  const dislikedPoints = [];
+  dislikedVoxels.forEach(idx => {
+    const voxel = allVoxelFeatures[idx];
+    if (!voxel._center) {
+      voxel._center = turf.center(voxel).geometry.coordinates;
+    }
+    dislikedPoints.push({ coords: voxel._center, type: 'disliked', idx });
+  });
+  
+  const likedPoints = [];
+  likedVoxels.forEach(idx => {
+    const voxel = allVoxelFeatures[idx];
+    if (!voxel._center) {
+      voxel._center = turf.center(voxel).geometry.coordinates;
+    }
+    likedPoints.push({ coords: voxel._center, type: 'liked', idx });
+  });
+  
+  console.log(`Clustering ${dislikedPoints.length} disliked and ${likedPoints.length} liked points`);
+  
+  const dislikedClusters = clusterPointsDBSCAN(dislikedPoints, CLUSTER_DISTANCE_KM);
+  const likedClusters = clusterPointsDBSCAN(likedPoints, CLUSTER_DISTANCE_KM);
+  
+  console.log(`Found ${dislikedClusters.length} disliked clusters and ${likedClusters.length} liked clusters`);
+  
+  // Build allClusters array
+  allClusters = [];
+  
+  dislikedClusters.forEach((cluster, idx) => {
+    const coords = cluster.map(p => p.coords);
+    const avgLon = coords.reduce((sum, c) => sum + c[0], 0) / coords.length;
+    const avgLat = coords.reduce((sum, c) => sum + c[1], 0) / coords.length;
+    
+    allClusters.push({
+      id: `disliked-${idx}`,
+      type: 'disliked',
+      label: `Disliked Area ${idx + 1}`,
+      size: cluster.length,
+      centroid: [avgLon, avgLat],
+      points: cluster
+    });
+  });
+  
+  likedClusters.forEach((cluster, idx) => {
+    const coords = cluster.map(p => p.coords);
+    const avgLon = coords.reduce((sum, c) => sum + c[0], 0) / coords.length;
+    const avgLat = coords.reduce((sum, c) => sum + c[1], 0) / coords.length;
+    
+    allClusters.push({
+      id: `liked-${idx}`,
+      type: 'liked',
+      label: `Liked Area ${idx + 1}`,
+      size: cluster.length,
+      centroid: [avgLon, avgLat],
+      points: cluster
+    });
+  });
+  
+  if (allClusters.length === 0) {
+    alert('No painted areas found.');
+    document.getElementById('step3-tag-clusters').classList.add('hidden');
+    document.getElementById('step2-paint').classList.remove('hidden');
+    return;
+  }
+  
+  // Initialize navigation handlers
+  initStep3Navigation();
+  
+  // Start with first cluster
+  currentClusterIndex = 0;
+  showCluster(0);
+}
+
+// Optimized DBSCAN-like clustering with spatial indexing
+function clusterPointsDBSCAN(points, maxDistance) {
+  if (points.length === 0) return [];
+  
+  // Build spatial index for fast neighbor lookup
+  const spatialGrid = new Map();
+  const gridSize = maxDistance; // Grid cell size = cluster distance
+  
+  points.forEach((point, idx) => {
+    const [lon, lat] = point.coords;
+    const gridX = Math.floor(lon / gridSize);
+    const gridY = Math.floor(lat / gridSize);
+    const key = `${gridX},${gridY}`;
+    
+    if (!spatialGrid.has(key)) {
+      spatialGrid.set(key, []);
+    }
+    spatialGrid.get(key).push({ ...point, originalIdx: idx });
+  });
+  
+  // DBSCAN clustering
+  const clusters = [];
+  const visited = new Set();
+  const clustered = new Set();
+  
+  function getNeighbors(pointIdx) {
+    const point = points[pointIdx];
+    const [lon, lat] = point.coords;
+    const gridX = Math.floor(lon / gridSize);
+    const gridY = Math.floor(lat / gridSize);
+    
+    const neighbors = [];
+    
+    // Check surrounding cells (3x3 grid)
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const key = `${gridX + dx},${gridY + dy}`;
+        const cellPoints = spatialGrid.get(key);
+        
+        if (cellPoints) {
+          cellPoints.forEach(cellPoint => {
+            const dist = turf.distance(point.coords, cellPoint.coords, { units: 'kilometers' });
+            if (dist <= maxDistance && cellPoint.originalIdx !== pointIdx) {
+              neighbors.push(cellPoint.originalIdx);
+            }
+          });
+        }
+      }
+    }
+    
+    return neighbors;
+  }
+  
+  function expandCluster(startIdx, neighbors, cluster) {
+    cluster.push(points[startIdx]);
+    clustered.add(startIdx);
+    
+    const queue = [...neighbors];
+    const inQueue = new Set(neighbors);
+    
+    while (queue.length > 0) {
+      const currentIdx = queue.shift();
+      
+      if (visited.has(currentIdx)) continue;
+      visited.add(currentIdx);
+      
+      if (!clustered.has(currentIdx)) {
+        cluster.push(points[currentIdx]);
+        clustered.add(currentIdx);
+      }
+      
+      const currentNeighbors = getNeighbors(currentIdx);
+      
+      currentNeighbors.forEach(neighborIdx => {
+        if (!inQueue.has(neighborIdx) && !clustered.has(neighborIdx)) {
+          queue.push(neighborIdx);
+          inQueue.add(neighborIdx);
+        }
+      });
+    }
+  }
+  
+  // Process all points
+  for (let i = 0; i < points.length; i++) {
+    if (clustered.has(i)) continue;
+    
+    visited.add(i);
+    const neighbors = getNeighbors(i);
+    
+    // Start new cluster
+    const cluster = [];
+    expandCluster(i, neighbors, cluster);
+    
+    if (cluster.length > 0) {
+      clusters.push(cluster);
+    }
+  }
+  
+  return clusters;
+}
+
+function showCluster(index) {
+  const cluster = allClusters[index];
+  
+  document.getElementById('cluster-number').textContent = index + 1;
+  document.getElementById('cluster-total').textContent = allClusters.length;
+  
+  const badge = document.getElementById('cluster-type-badge');
+  badge.textContent = cluster.type === 'disliked' ? 'Disliked Area' : 'Liked Area';
+  badge.className = `cluster-type-badge ${cluster.type}`;
+  
+  document.getElementById('cluster-size').textContent = `${cluster.size} voxels`;
+  
+  renderTagCategories(cluster);
+  showClusterMarker(cluster.centroid, cluster.type);
+  
+  document.getElementById('prev-cluster-btn').disabled = (index === 0);
+  const nextBtn = document.getElementById('next-cluster-btn');
+  nextBtn.textContent = (index === allClusters.length - 1) ? 'Finish →' : 'Next →';
+}
+
+function renderTagCategories(cluster) {
+  const container = document.getElementById('tag-categories-container');
+  container.innerHTML = '';
+  
+  const savedData = clusterLabels[cluster.id] || { tags: [], comment: '', openCategory: null };
+  
+  // Show only positive for liked clusters, only negative for disliked
+  const showPositive = (cluster.type === 'liked');
+  
+  Object.entries(TAG_OPTIONS).forEach(([category, options], index) => {
+    const categoryDiv = document.createElement('div');
+    const isOpen = (savedData.openCategory === category);
+    categoryDiv.className = isOpen ? 'tag-category' : 'tag-category collapsed';
+    categoryDiv.dataset.category = category;
+    
+    let html = `
+      <div class="tag-category-header">
+        <div class="tag-category-title">
+          <span>${category}</span>
+        </div>
+        <span class="tag-category-arrow">▼</span>
+      </div>
+      <div class="tag-options-group">
+    `;
+    
+    // Show only relevant options based on cluster type
+    const relevantOptions = showPositive ? options.positive : options.negative;
+    const prefix = showPositive ? '✓' : '✗';
+    const optionClass = showPositive ? 'positive' : 'negative';
+    
+    relevantOptions.forEach(option => {
+      const isSelected = savedData.tags.includes(option);
+      html += `
+        <div class="tag-option-item ${optionClass} ${isSelected ? 'selected' : ''}" data-tag="${option}">
+          <input type="checkbox" class="tag-option-checkbox" ${isSelected ? 'checked' : ''} />
+          <span class="tag-option-label">${prefix} ${option}</span>
+        </div>
+      `;
+    });
+    
+    html += '</div>';
+    categoryDiv.innerHTML = html;
+    container.appendChild(categoryDiv);
+    
+    // Add click handler for header to toggle
+    const header = categoryDiv.querySelector('.tag-category-header');
+    header.addEventListener('click', () => {
+      // Close all other categories
+      container.querySelectorAll('.tag-category').forEach(cat => {
+        if (cat !== categoryDiv) {
+          cat.classList.add('collapsed');
+        }
+      });
+      
+      // Toggle this one
+      const wasCollapsed = categoryDiv.classList.contains('collapsed');
+      categoryDiv.classList.toggle('collapsed');
+      
+      // Save open category
+      if (!categoryDiv.classList.contains('collapsed')) {
+        savedData.openCategory = category;
+        clusterLabels[cluster.id] = savedData;
+      }
+    });
+  });
+  
+  // Auto-save on change
+  container.querySelectorAll('.tag-option-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      const checkbox = item.querySelector('input[type="checkbox"]');
+      if (e.target !== checkbox) {
+        checkbox.checked = !checkbox.checked;
+      }
+      item.classList.toggle('selected', checkbox.checked);
+      autoSaveCurrentCluster();
+    });
+  });
+  
+  document.getElementById('current-cluster-comment').value = savedData.comment || '';
+  
+  // Auto-save comment (remove old listener first to avoid duplicates)
+  const commentBox = document.getElementById('current-cluster-comment');
+  const commentHandler = () => autoSaveCurrentCluster();
+  commentBox.removeEventListener('input', commentHandler);
+  commentBox.addEventListener('input', commentHandler);
+}
+
+function autoSaveCurrentCluster() {
+  const cluster = allClusters[currentClusterIndex];
+  
+  const selectedTags = [];
+  document.querySelectorAll('.tag-option-item input:checked').forEach(checkbox => {
+    const item = checkbox.closest('.tag-option-item');
+    selectedTags.push(item.dataset.tag);
+  });
+  
+  const comment = document.getElementById('current-cluster-comment').value.trim();
+  
+  // Find which category is open
+  let openCategory = null;
+  document.querySelectorAll('.tag-category').forEach(cat => {
+    if (!cat.classList.contains('collapsed')) {
+      openCategory = cat.dataset.category;
+    }
+  });
+  
+  clusterLabels[cluster.id] = {
+    tags: selectedTags,
+    comment: comment,
+    openCategory: openCategory
+  };
+}
+
+// Initialize Step 3 navigation (call once when Step 3 is first shown)
+let step3NavigationInitialized = false;
+
+function initStep3Navigation() {
+  if (step3NavigationInitialized) return;
+  
+  document.getElementById('prev-cluster-btn').addEventListener('click', () => {
+    currentClusterIndex--;
+    showCluster(currentClusterIndex);
+  });
+
+  document.getElementById('next-cluster-btn').addEventListener('click', () => {
+    if (currentClusterIndex < allClusters.length - 1) {
+      currentClusterIndex++;
+      showCluster(currentClusterIndex);
+    } else {
+      clusterMarkers.forEach(marker => marker.remove());
+      clusterMarkers = [];
+      document.getElementById('step3-tag-clusters').classList.add('hidden');
+      document.getElementById('step4-submit').classList.remove('hidden');
+    }
+  });
+
+  document.getElementById('skip-cluster-btn').addEventListener('click', () => {
+    const cluster = allClusters[currentClusterIndex];
+    clusterLabels[cluster.id] = { tags: [], comment: '' };
+    
+    if (currentClusterIndex < allClusters.length - 1) {
+      currentClusterIndex++;
+      showCluster(currentClusterIndex);
+    } else {
+      clusterMarkers.forEach(marker => marker.remove());
+      clusterMarkers = [];
+      document.getElementById('step3-tag-clusters').classList.add('hidden');
+      document.getElementById('step4-submit').classList.remove('hidden');
+    }
+  });
+  
+  step3NavigationInitialized = true;
+}
+
+function showClusterMarker(coords, type) {
+  // Remove existing cluster markers
+  clusterMarkers.forEach(marker => marker.remove());
+  clusterMarkers = [];
+  
+  // Create teardrop marker
+  const el = document.createElement('div');
+  el.style.width = '30px';
+  el.style.height = '40px';
+  el.style.position = 'relative';
+  el.innerHTML = `
+    <svg width="30" height="40" viewBox="0 0 30 40" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">
+      <path d="M15,5 C10,5 5,10 5,15 C5,20 15,35 15,35 C15,35 25,20 25,15 C25,10 20,5 15,5 Z" 
+            fill="${type === 'disliked' ? '#ea4335' : '#34a853'}" 
+            stroke="white" 
+            stroke-width="2"/>
+      <circle cx="15" cy="15" r="5" fill="white"/>
+    </svg>
+  `;
+  
+  const marker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
+    .setLngLat(coords)
+    .addTo(map);
+  
+  clusterMarkers.push(marker);
+  
+  // Fly to cluster with closer zoom
+  map.flyTo({
+    center: coords,
+    zoom: 18.5, // Much closer zoom (was 17)
+    pitch: 60, // Good 3D view
+    duration: 1000
+  });
+}
+
+// Next to submit
+document.getElementById('next-to-submit-btn').addEventListener('click', () => {
+  // Remove cluster markers
+  clusterMarkers.forEach(marker => marker.remove());
+  clusterMarkers = [];
+  
+  document.getElementById('step3-tag-clusters').classList.add('hidden');
+  document.getElementById('step4-submit').classList.remove('hidden');
+});
+
+// Submit
+document.getElementById('submit-btn').addEventListener('click', () => {
+  const labeledClusters = Object.keys(clusterLabels).length;
+  
+  let message = `Tags submitted!\n\nMost Disliked Areas: ${dislikedVoxels.size} voxels\nMost Liked Areas: ${likedVoxels.size} voxels`;
+  
+  if (labeledClusters > 0) {
+    message += `\n\nLabeled Clusters: ${labeledClusters}`;
+    
+    Object.entries(clusterLabels).forEach(([id, data]) => {
+      const tags = data.tags.join(', ');
+      const comment = data.comment;
+      message += `\n\n${id}:\nTags: ${tags}`;
+      if (comment) message += `\nComment: ${comment}`;
+    });
+  }
+  
+  message += '\n\nData saved successfully.';
+  
+  alert(message);
+});
+
+// View controls
+document.getElementById('pitch-slider').addEventListener('input', (e) => {
+  const pitch = parseInt(e.target.value);
+  document.getElementById('pitch-value').textContent = pitch;
+  map.setPitch(pitch);
+});
+
+document.getElementById('toggle-buildings').addEventListener('change', (e) => {
+  if (map.getLayer('voxel-fill')) {
+    map.setLayoutProperty('voxel-fill', 'visibility', e.target.checked ? 'visible' : 'none');
+  }
+});
+
+document.getElementById('toggle-trees').addEventListener('change', (e) => {
+  if (map.getLayer('tree-cubes')) {
+    map.setLayoutProperty('tree-cubes', 'visibility', e.target.checked ? 'visible' : 'none');
+  }
+});
+
+document.getElementById('toggle-radius').addEventListener('change', (e) => {
+  if (map.getLayer('radius-circle-fill')) {
+    const v = e.target.checked ? 'visible' : 'none';
+    map.setLayoutProperty('radius-circle-fill', 'visibility', v);
+    map.setLayoutProperty('radius-circle-line', 'visibility', v);
+  }
+});
+
+// Satellite toggle
+let satelliteLayerAdded = false;
+
+document.getElementById('toggle-satellite').addEventListener('change', (e) => {
+  if (e.target.checked) {
+    addSatelliteLayer();
+  } else {
+    removeSatelliteLayer();
+  }
+});
+
+function addSatelliteLayer() {
+  if (!satelliteLayerAdded) {
+    try {
+      map.addSource('google-satellite', {
+        type: 'raster',
+        tiles: [
+          'https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+          'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'
+        ],
+        tileSize: 256
+      });
+      
+      // Insert before voxels if they exist, otherwise just add
+      const beforeLayer = map.getLayer('voxel-fill') ? 'voxel-fill' : undefined;
+      
+      map.addLayer({
+        id: 'google-satellite-layer',
+        type: 'raster',
+        source: 'google-satellite',
+        paint: { 'raster-opacity': 0.7 }
+      }, beforeLayer);
+      
+      satelliteLayerAdded = true;
+      console.log('✓ Satellite layer added');
+    } catch (error) {
+      console.error('Error adding satellite layer:', error);
+    }
+  }
+}
+
+function removeSatelliteLayer() {
+  if (satelliteLayerAdded) {
+    if (map.getLayer('google-satellite-layer')) {
+      map.removeLayer('google-satellite-layer');
+    }
+    if (map.getSource('google-satellite')) {
+      map.removeSource('google-satellite');
+    }
+    satelliteLayerAdded = false;
+  }
+}
+
+// Reset
+document.getElementById('reset-btn').addEventListener('click', () => {
+  if (centerMarker) { centerMarker.remove(); centerMarker = null; }
+  
+  if (map.getLayer('voxel-fill')) { map.removeLayer('voxel-fill'); map.removeSource('voxel-cubes'); }
+  if (map.getLayer('tree-cubes')) { map.removeLayer('tree-cubes'); map.removeSource('tree-cubes'); }
+  if (map.getLayer('radius-circle-fill')) { 
+    map.removeLayer('radius-circle-fill'); 
+    map.removeLayer('radius-circle-line'); 
+    map.removeSource('radius-circle'); 
+  }
+  
+  groundPaintMarkers.forEach(paintId => {
+    if (map.getLayer(paintId)) {
+      map.removeLayer(paintId);
+      map.removeSource(paintId);
+    }
+  });
+  groundPaintMarkers = [];
+  
+  clusterMarkers.forEach(marker => marker.remove());
+  clusterMarkers = [];
+  
+  removeToolPreview();
+  
+  if (map.getLayer('building')) map.setLayoutProperty('building', 'visibility', 'visible');
+  
+  voxelsLoaded = false;
+  voxelSpatialIndex = null;
+  currentTool = 'cursor';
+  currentPaintColor = 'disliked';
+  dislikedVoxels.clear();
+  likedVoxels.clear();
+  allVoxelFeatures = [];
+  isDragging = false;
+  clusterLabels = {};
+  selectedClusterId = null;
+  
+  map.dragPan.enable();
+  map.scrollZoom.enable();
+  
+  // Reset UI
+  document.getElementById('step1').classList.remove('hidden');
+  document.getElementById('step2-paint').classList.add('hidden');
+  document.getElementById('step3-tag-clusters').classList.add('hidden');
+  document.getElementById('step4-submit').classList.add('hidden');
+  
+  document.getElementById('location-selected').classList.add('hidden');
+  document.getElementById('click-instruction').classList.remove('hidden');
+  document.getElementById('address-suggestions').classList.add('hidden');
+  document.getElementById('address-input').value = '';
+  
+  document.getElementById('clusters-list').innerHTML = '';
+  document.getElementById('reset-btn').classList.add('hidden');
+  
+  document.getElementById('tool-cursor').classList.add('active');
+  document.getElementById('tool-paint').classList.remove('active');
+  document.getElementById('tool-erase').classList.remove('active');
+  document.getElementById('paint-red').classList.add('active');
+  document.getElementById('paint-green').classList.remove('active');
+  
+  map.flyTo({
+    center: MONTREAL_CENTER,
+    zoom: 12,
+    pitch: 45,
+    bearing: -17,
+    duration: 1500
+  });
+  
+});
+
+</script>
+
+</body>
+</html>
